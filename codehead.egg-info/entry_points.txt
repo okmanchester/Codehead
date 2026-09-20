@@ -1,2 +1,0 @@
-[console_scripts]
-codehead = codehead.cli:main
