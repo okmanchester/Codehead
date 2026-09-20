@@ -1,0 +1,8 @@
+openai<4,>=3.16
+pydantic<3,>=2.13
+python-dotenv<2,>=1.2
+rich<16,>=15
+
+[dev]
+pytest<10,>=9.1
+ruff<0.17,>=0.16

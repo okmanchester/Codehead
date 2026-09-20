@@ -1,0 +1,4 @@
+interface:
+  display_name: "Development Workflow"
+  short_description: "保护工作区，按真实风险规划，并用仓库自身验证方式完成开发改动"
+  default_prompt: "Use $development-workflow to understand the current repository and worktree, choose only the planning depth this change actually needs, implement the smallest sufficient scoped change, verify it using the repository's real validation paths, and report evidence from the actual diff and executed checks."

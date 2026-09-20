@@ -1,0 +1,20 @@
+[project]
+name = "codehead"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+dependencies = [
+    "openai>=3.16,<4",
+    "pydantic>=2.13,<3",
+    "python-dotenv>=1.2,<2",
+    "rich>=15,<16",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.1,<10",
+    "ruff>=0.16,<0.17",
+]
+
+[project.scripts]
+codehead = "codehead.cli:main"
