@@ -1,47 +1,73 @@
 from collections.abc import Mapping
-from typing import Any, ClassVar
+from typing import ClassVar, cast
 
 import pytest
 
 from codehead.errors import ToolExecutionError
-from codehead.session import ToolCall, ToolResult
+from codehead.models import JsonObject, JsonValue, ToolCall, ToolResult
 from codehead.tools import Tool, ToolRegistry
 
 
 class EchoTool(Tool):
     name = "echo"
     description = "Return the supplied text."
-    parameters: ClassVar[dict[str, Any]] = {
+    parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {"text": {"type": "string"}},
         "required": ["text"],
     }
 
-    def execute(self, arguments: Mapping[str, Any]) -> str:
+    def execute(self, arguments: Mapping[str, JsonValue]) -> str:
         return str(arguments["text"])
 
 
 class BrokenTool(Tool):
     name = "broken"
     description = "Raise a non-domain error."
-    parameters: ClassVar[dict[str, Any]] = {
+    parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {},
     }
 
-    def execute(self, arguments: Mapping[str, Any]) -> str:
+    def execute(self, arguments: Mapping[str, JsonValue]) -> str:
         raise RuntimeError("boom")
 
 
-def test_register_get_schema_and_execute() -> None:
+class MutatingTool(Tool):
+    name = "mutate"
+    description = "Mutate nested arguments."
+    parameters: ClassVar[JsonObject] = {
+        "type": "object",
+        "properties": {"values": {"type": "array"}},
+    }
+
+    def execute(self, arguments: Mapping[str, JsonValue]) -> str:
+        values = cast(list[JsonValue], arguments["values"])
+        values.append("changed")
+        return "done"
+
+
+def test_register_get_definition_and_execute() -> None:
     tool = EchoTool()
     registry = ToolRegistry([tool])
 
     assert registry.get("echo") is tool
-    assert registry.schemas() == [tool.schema()]
+    assert registry.definitions() == (tool.definition(),)
     assert registry.execute(
         ToolCall(id="call-1", name="echo", arguments={"text": "hello"})
     ) == ToolResult(tool_call_id="call-1", output="hello")
+
+
+def test_execute_uses_a_defensive_arguments_copy() -> None:
+    call = ToolCall(
+        id="call-1",
+        name="mutate",
+        arguments={"values": ["original"]},
+    )
+
+    ToolRegistry([MutatingTool()]).execute(call)
+
+    assert call.arguments == {"values": ["original"]}
 
 
 def test_duplicate_and_unknown_tools_are_rejected() -> None:

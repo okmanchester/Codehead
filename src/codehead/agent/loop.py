@@ -2,7 +2,15 @@
 
 from codehead.agent.agent import Agent
 from codehead.errors import AgentAbortedError, ModelError, ToolExecutionError
-from codehead.session import Message, Session, ToolResult
+from codehead.models import (
+    FinishReason,
+    LLMRequest,
+    SystemMessage,
+    ToolMessage,
+    ToolResult,
+    UserMessage,
+)
+from codehead.session import Session
 
 
 class AgentLoop:
@@ -17,25 +25,40 @@ class AgentLoop:
     def run(self, session: Session, user_input: str) -> str:
         """Run one user turn against the supplied in-memory session."""
         if len(session) == 0:
-            session.add(Message(role="system", content=self._agent.system_prompt))
-        session.add(Message(role="user", content=user_input))
+            session.add(SystemMessage(content=self._agent.system_prompt))
+        session.add(UserMessage(content=user_input))
 
         for _ in range(self._max_steps):
-            assistant = self._agent.provider.complete(
-                session.messages,
-                self._agent.tools.schemas(),
+            response = self._agent.provider.complete(
+                LLMRequest(
+                    messages=session.messages,
+                    tools=self._agent.tools.definitions(),
+                )
             )
-            if assistant.role != "assistant":
-                raise ModelError("Model provider must return an assistant message")
+            assistant = response.message
 
-            session.add(assistant)
-            if not assistant.tool_calls:
+            if response.finish_reason == FinishReason.END_TURN:
+                if assistant.tool_calls:
+                    raise ModelError("END_TURN response must not contain tool calls")
                 if assistant.content is None or not assistant.content.strip():
                     raise ModelError(
-                        "Model response contained neither text nor tool calls"
+                        "END_TURN response must contain non-blank text"
                     )
+                session.add(assistant)
                 return assistant.content
 
+            if response.finish_reason == FinishReason.MAX_TOKENS:
+                raise ModelError("Model output was truncated (MAX_TOKENS)")
+            if response.finish_reason == FinishReason.CONTENT_FILTER:
+                raise ModelError("Model response was filtered (CONTENT_FILTER)")
+            if response.finish_reason == FinishReason.UNKNOWN:
+                raise ModelError("Model returned an unknown finish reason (UNKNOWN)")
+            if response.finish_reason != FinishReason.TOOL_CALLS:
+                raise ModelError(f"Unsupported finish reason: {response.finish_reason}")
+            if not assistant.tool_calls:
+                raise ModelError("TOOL_CALLS response must contain tool calls")
+
+            session.add(assistant)
             for tool_call in assistant.tool_calls:
                 try:
                     result = self._agent.tools.execute(tool_call)
@@ -45,7 +68,13 @@ class AgentLoop:
                         output=str(exc),
                         is_error=True,
                     )
-                session.add(Message(role="tool", tool_result=result))
+                session.add(
+                    ToolMessage(
+                        tool_call_id=result.tool_call_id,
+                        content=result.output,
+                        is_error=result.is_error,
+                    )
+                )
 
         raise AgentAbortedError(
             f"Agent did not produce a final answer within {self._max_steps} steps"

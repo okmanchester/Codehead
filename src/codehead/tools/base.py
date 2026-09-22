@@ -2,12 +2,12 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from codehead.errors import ToolExecutionError
-
-type ToolSchema = dict[str, Any]
+from codehead.models import JsonObject, JsonValue, ToolDefinition
 
 
 class Tool(ABC):
@@ -15,23 +15,23 @@ class Tool(ABC):
 
     name: ClassVar[str]
     description: ClassVar[str]
-    parameters: ClassVar[ToolSchema]
+    parameters: ClassVar[JsonObject]
 
-    def schema(self) -> ToolSchema:
-        """Return the provider-independent function schema for this tool."""
-        return {
-            "name": self.name,
-            "description": self.description,
-            "parameters": self.parameters,
-        }
+    def definition(self) -> ToolDefinition:
+        """Return the provider-independent definition for this tool."""
+        return ToolDefinition(
+            name=self.name,
+            description=self.description,
+            parameters=deepcopy(self.parameters),
+        )
 
     @abstractmethod
-    def execute(self, arguments: Mapping[str, Any]) -> str:
+    def execute(self, arguments: Mapping[str, JsonValue]) -> str:
         """Execute the tool and return textual output."""
 
 
 def require_string_argument(
-    arguments: Mapping[str, Any],
+    arguments: Mapping[str, JsonValue],
     name: str,
     *,
     allow_empty: bool = False,

@@ -1,10 +1,11 @@
 """Registration and dispatch for tools."""
 
 from collections.abc import Iterable
+from copy import deepcopy
 
 from codehead.errors import ToolExecutionError
-from codehead.session import ToolCall, ToolResult
-from codehead.tools.base import Tool, ToolSchema
+from codehead.models import ToolCall, ToolDefinition, ToolResult
+from codehead.tools.base import Tool
 
 
 class ToolRegistry:
@@ -28,15 +29,15 @@ class ToolRegistry:
         except KeyError:
             raise ToolExecutionError(f"Unknown tool: {name}") from None
 
-    def schemas(self) -> list[ToolSchema]:
-        """Return schemas in registration order."""
-        return [tool.schema() for tool in self._tools.values()]
+    def definitions(self) -> tuple[ToolDefinition, ...]:
+        """Return tool definitions in registration order."""
+        return tuple(tool.definition() for tool in self._tools.values())
 
     def execute(self, tool_call: ToolCall) -> ToolResult:
         """Execute a tool call and associate its output with the call id."""
         tool = self.get(tool_call.name)
         try:
-            output = tool.execute(tool_call.arguments)
+            output = tool.execute(deepcopy(tool_call.arguments))
         except ToolExecutionError:
             raise
         except Exception as exc:

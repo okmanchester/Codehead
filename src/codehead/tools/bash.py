@@ -5,9 +5,10 @@ import platform
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from codehead.errors import ToolExecutionError
+from codehead.models import JsonObject, JsonValue
 from codehead.tools.base import Tool, require_string_argument
 
 
@@ -17,7 +18,7 @@ class BashTool(Tool):
         "Run a shell command from the workspace "
         "(PowerShell on Windows, Bash on Unix)."
     )
-    parameters: ClassVar[dict[str, Any]] = {
+    parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {"command": {"type": "string"}},
         "required": ["command"],
@@ -30,7 +31,7 @@ class BashTool(Tool):
         self.workspace = workspace.expanduser().resolve()
         self.timeout_seconds = timeout_seconds
 
-    def execute(self, arguments: Mapping[str, Any]) -> str:
+    def execute(self, arguments: Mapping[str, JsonValue]) -> str:
         command = require_string_argument(arguments, "command")
         environment = os.environ.copy()
         environment.pop("DEEPSEEK_API_KEY", None)

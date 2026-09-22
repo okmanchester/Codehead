@@ -2,9 +2,10 @@
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from codehead.errors import ToolExecutionError
+from codehead.models import JsonObject, JsonValue
 from codehead.tools.base import (
     Tool,
     require_string_argument,
@@ -15,7 +16,7 @@ from codehead.tools.base import (
 class EditTool(Tool):
     name = "edit"
     description = "Replace one unique exact text occurrence in a workspace file."
-    parameters: ClassVar[dict[str, Any]] = {
+    parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {
             "path": {"type": "string"},
@@ -29,7 +30,7 @@ class EditTool(Tool):
     def __init__(self, workspace: Path) -> None:
         self.workspace = workspace.expanduser().resolve()
 
-    def execute(self, arguments: Mapping[str, Any]) -> str:
+    def execute(self, arguments: Mapping[str, JsonValue]) -> str:
         path_value = require_string_argument(arguments, "path")
         old_text = require_string_argument(arguments, "old_text")
         new_text = require_string_argument(

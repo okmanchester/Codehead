@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable
 
-from codehead.session.message import Message
+from codehead.models import Message
 
 
 class Session:

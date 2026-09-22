@@ -1,6 +1,6 @@
 """Tool interfaces, registry, and built-in tools."""
 
-from codehead.tools.base import Tool, ToolSchema
+from codehead.tools.base import Tool
 from codehead.tools.bash import BashTool
 from codehead.tools.edit import EditTool
 from codehead.tools.read import ReadTool
@@ -13,6 +13,5 @@ __all__ = [
     "ReadTool",
     "Tool",
     "ToolRegistry",
-    "ToolSchema",
     "WriteTool",
 ]

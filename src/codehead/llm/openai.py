@@ -1,15 +1,26 @@
 """OpenAI-compatible Chat Completions provider."""
 
 import json
-from collections.abc import Sequence
 from typing import Any
 
 from openai import OpenAI, OpenAIError
+from pydantic import ValidationError
 
 from codehead.errors import ModelError
 from codehead.llm.base import LLMProvider
-from codehead.session import Message, ToolCall
-from codehead.tools.base import ToolSchema
+from codehead.models import (
+    AssistantMessage,
+    FinishReason,
+    LLMRequest,
+    LLMResponse,
+    Message,
+    SystemMessage,
+    TokenUsage,
+    ToolCall,
+    ToolDefinition,
+    ToolMessage,
+    UserMessage,
+)
 
 
 class OpenAIProvider(LLMProvider):
@@ -34,50 +45,43 @@ class OpenAIProvider(LLMProvider):
             max_retries=0,
         )
 
-    def complete(
-        self,
-        messages: Sequence[Message],
-        tools: Sequence[ToolSchema],
-    ) -> Message:
-        request: dict[str, Any] = {
+    def complete(self, request: LLMRequest) -> LLMResponse:
+        payload: dict[str, Any] = {
             "model": self.model,
-            "messages": [_message_payload(message) for message in messages],
+            "messages": [
+                _message_payload(message) for message in request.messages
+            ],
             "stream": False,
         }
-        if tools:
-            request["tools"] = [
-                {"type": "function", "function": schema} for schema in tools
+        if request.tools:
+            payload["tools"] = [
+                _tool_definition_payload(definition)
+                for definition in request.tools
             ]
         if self.disable_thinking:
-            request["extra_body"] = {"thinking": {"type": "disabled"}}
+            payload["extra_body"] = {"thinking": {"type": "disabled"}}
 
         try:
-            response = self._client.chat.completions.create(**request)
+            response = self._client.chat.completions.create(**payload)
         except OpenAIError as exc:
             raise ModelError(f"Model request failed: {exc}") from exc
 
-        if not response.choices:
-            raise ModelError("Model response did not contain any choices")
-
-        response_message = response.choices[0].message
-        tool_calls = [
-            _parse_tool_call(tool_call)
-            for tool_call in (response_message.tool_calls or [])
-        ]
-        return Message(
-            role="assistant",
-            content=response_message.content,
-            tool_calls=tool_calls,
-        )
+        try:
+            return _parse_response(response)
+        except ModelError:
+            raise
+        except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+            raise ModelError("Model returned an invalid response") from exc
 
 
 def _message_payload(message: Message) -> dict[str, Any]:
-    if message.role in {"system", "user"}:
-        if message.content is None:
-            raise ModelError(f"{message.role} message must contain text")
-        return {"role": message.role, "content": message.content}
+    if isinstance(message, SystemMessage):
+        return {"role": "system", "content": message.content}
 
-    if message.role == "assistant":
+    if isinstance(message, UserMessage):
+        return {"role": "user", "content": message.content}
+
+    if isinstance(message, AssistantMessage):
         payload: dict[str, Any] = {
             "role": "assistant",
             "content": message.content,
@@ -99,16 +103,44 @@ def _message_payload(message: Message) -> dict[str, Any]:
             ]
         return payload
 
-    if message.tool_result is None:
-        raise ModelError("tool message must contain a tool result")
-    output = message.tool_result.output
-    if message.tool_result.is_error:
-        output = f"Error: {output}"
+    if isinstance(message, ToolMessage):
+        content = message.content
+        if message.is_error:
+            content = f"Error: {content}"
+        return {
+            "role": "tool",
+            "tool_call_id": message.tool_call_id,
+            "content": content,
+        }
+
+    raise ModelError(f"Unsupported message type: {type(message).__name__}")
+
+
+def _tool_definition_payload(definition: ToolDefinition) -> dict[str, Any]:
     return {
-        "role": "tool",
-        "tool_call_id": message.tool_result.tool_call_id,
-        "content": output,
+        "type": "function",
+        "function": definition.model_dump(mode="json"),
     }
+
+
+def _parse_response(response: Any) -> LLMResponse:
+    if not response.choices:
+        raise ModelError("Model response did not contain any choices")
+
+    choice = response.choices[0]
+    response_message = choice.message
+    tool_calls = tuple(
+        _parse_tool_call(tool_call)
+        for tool_call in (response_message.tool_calls or ())
+    )
+    return LLMResponse(
+        message=AssistantMessage(
+            content=response_message.content,
+            tool_calls=tool_calls,
+        ),
+        finish_reason=_finish_reason(getattr(choice, "finish_reason", None)),
+        usage=_parse_usage(getattr(response, "usage", None)),
+    )
 
 
 def _parse_tool_call(tool_call: Any) -> ToolCall:
@@ -116,14 +148,37 @@ def _parse_tool_call(tool_call: Any) -> ToolCall:
         name = tool_call.function.name
         raw_arguments = tool_call.function.arguments
         arguments = json.loads(raw_arguments)
+        call_id = tool_call.id
     except (AttributeError, json.JSONDecodeError, TypeError) as exc:
         raise ModelError("Model returned an invalid function tool call") from exc
 
     if not isinstance(arguments, dict):
         raise ModelError("Tool call arguments must be a JSON object")
 
-    return ToolCall(
-        id=tool_call.id,
-        name=name,
-        arguments=arguments,
+    try:
+        return ToolCall(id=call_id, name=name, arguments=arguments)
+    except ValidationError as exc:
+        raise ModelError("Model returned an invalid function tool call") from exc
+
+
+def _parse_usage(usage: Any) -> TokenUsage | None:
+    if usage is None:
+        return None
+    return TokenUsage(
+        input_tokens=usage.prompt_tokens,
+        output_tokens=usage.completion_tokens,
+        total_tokens=usage.total_tokens,
     )
+
+
+def _finish_reason(value: object) -> FinishReason:
+    if not isinstance(value, str):
+        return FinishReason.UNKNOWN
+    reasons = {
+        "stop": FinishReason.END_TURN,
+        "tool_calls": FinishReason.TOOL_CALLS,
+        "function_call": FinishReason.TOOL_CALLS,
+        "length": FinishReason.MAX_TOKENS,
+        "content_filter": FinishReason.CONTENT_FILTER,
+    }
+    return reasons.get(value, FinishReason.UNKNOWN)

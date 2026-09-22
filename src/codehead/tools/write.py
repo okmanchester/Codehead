@@ -2,9 +2,10 @@
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import ClassVar
 
 from codehead.errors import ToolExecutionError
+from codehead.models import JsonObject, JsonValue
 from codehead.tools.base import (
     Tool,
     require_string_argument,
@@ -15,7 +16,7 @@ from codehead.tools.base import (
 class WriteTool(Tool):
     name = "write"
     description = "Create or overwrite a UTF-8 text file inside the workspace."
-    parameters: ClassVar[dict[str, Any]] = {
+    parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {
             "path": {"type": "string"},
@@ -28,7 +29,7 @@ class WriteTool(Tool):
     def __init__(self, workspace: Path) -> None:
         self.workspace = workspace.expanduser().resolve()
 
-    def execute(self, arguments: Mapping[str, Any]) -> str:
+    def execute(self, arguments: Mapping[str, JsonValue]) -> str:
         path_value = require_string_argument(arguments, "path")
         content = require_string_argument(arguments, "content", allow_empty=True)
         path = resolve_workspace_path(self.workspace, path_value)

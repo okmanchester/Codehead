@@ -1,19 +1,13 @@
 """Provider-independent model interface."""
 
 from abc import ABC, abstractmethod
-from collections.abc import Sequence
 
-from codehead.session import Message
-from codehead.tools.base import ToolSchema
+from codehead.models import LLMRequest, LLMResponse
 
 
 class LLMProvider(ABC):
     """Convert conversation state into the next assistant message."""
 
     @abstractmethod
-    def complete(
-        self,
-        messages: Sequence[Message],
-        tools: Sequence[ToolSchema],
-    ) -> Message:
-        """Return one assistant response for the supplied conversation."""
+    def complete(self, request: LLMRequest) -> LLMResponse:
+        """Return one normalized response for the supplied request."""

@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 
 from codehead.errors import ToolExecutionError
+from codehead.models import ToolDefinition
 from codehead.tools import BashTool, EditTool, ReadTool, Tool, WriteTool
 
 
@@ -19,20 +20,21 @@ from codehead.tools import BashTool, EditTool, ReadTool, Tool, WriteTool
         (BashTool, "bash", ["command"]),
     ],
 )
-def test_tool_schema(
+def test_tool_definition(
     tmp_path: Path,
     tool_type: type[Tool],
     name: str,
     required: list[str],
 ) -> None:
     tool = tool_type(tmp_path)
-    schema = tool.schema()
+    definition = tool.definition()
 
-    assert schema["name"] == name
-    assert schema["description"]
-    assert schema["parameters"]["type"] == "object"
-    assert schema["parameters"]["required"] == required
-    assert schema["parameters"]["additionalProperties"] is False
+    assert isinstance(definition, ToolDefinition)
+    assert definition.name == name
+    assert definition.description
+    assert definition.parameters["type"] == "object"
+    assert definition.parameters["required"] == required
+    assert definition.parameters["additionalProperties"] is False
 
 
 def test_write_read_and_edit_round_trip(tmp_path: Path) -> None:
