@@ -56,3 +56,19 @@ Codehead 正处于早期开发阶段。
 * pytest
 
 其他依赖将在出现明确需求时引入。
+
+## Quick Start
+
+```powershell
+conda activate codehead
+python -m pip install -e . --no-build-isolation
+$env:DEEPSEEK_API_KEY = "your-api-key"
+codehead
+```
+
+Codehead 默认使用 `deepseek-flash` 和 `https://api.deepseek.com`。可通过
+`CODEHEAD_MODEL`、`DEEPSEEK_BASE_URL` 和 `CODEHEAD_WORKSPACE` 覆盖默认值。
+
+当前 `read`、`write` 和 `edit` 工具只能访问 workspace 内的文件。`bash` 工具
+以 workspace 为工作目录，但不提供进程沙箱；Windows 使用 PowerShell，Unix
+使用 Bash。

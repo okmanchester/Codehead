@@ -1,15 +1,20 @@
-"""Placeholder edit tool."""
+"""Apply one exact text replacement inside the configured workspace."""
 
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, ClassVar
 
 from codehead.errors import ToolExecutionError
-from codehead.tools.base import Tool
+from codehead.tools.base import (
+    Tool,
+    require_string_argument,
+    resolve_workspace_path,
+)
 
 
 class EditTool(Tool):
     name = "edit"
-    description = "Replace exact text in a workspace file."
+    description = "Replace one unique exact text occurrence in a workspace file."
     parameters: ClassVar[dict[str, Any]] = {
         "type": "object",
         "properties": {
@@ -21,5 +26,37 @@ class EditTool(Tool):
         "additionalProperties": False,
     }
 
+    def __init__(self, workspace: Path) -> None:
+        self.workspace = workspace.expanduser().resolve()
+
     def execute(self, arguments: Mapping[str, Any]) -> str:
-        raise ToolExecutionError("edit tool is not implemented in Codehead v0")
+        path_value = require_string_argument(arguments, "path")
+        old_text = require_string_argument(arguments, "old_text")
+        new_text = require_string_argument(
+            arguments,
+            "new_text",
+            allow_empty=True,
+        )
+        path = resolve_workspace_path(self.workspace, path_value)
+
+        try:
+            content = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise ToolExecutionError(f"Failed to edit '{path_value}': {exc}") from exc
+
+        occurrences = content.count(old_text)
+        if occurrences == 0:
+            raise ToolExecutionError(
+                f"Text to replace was not found in '{path_value}'"
+            )
+        if occurrences > 1:
+            raise ToolExecutionError(
+                f"Text to replace occurs {occurrences} times in '{path_value}'"
+            )
+
+        try:
+            path.write_text(content.replace(old_text, new_text, 1), encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            raise ToolExecutionError(f"Failed to edit '{path_value}': {exc}") from exc
+
+        return f"Edited {path.relative_to(self.workspace)}"

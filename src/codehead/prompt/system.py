@@ -9,7 +9,8 @@ def build_system_prompt(workspace: Path) -> str:
     prompt = (
         "You are Codehead, a coding agent.\n"
         f"Work inside this workspace: {resolved_workspace}\n"
-        "Use the available tools when needed and explain the final result clearly."
+        "File paths should be relative to the workspace. Use the available tools "
+        "when needed and explain the final result clearly."
     )
 
     instructions_path = resolved_workspace / "AGENTS.md"

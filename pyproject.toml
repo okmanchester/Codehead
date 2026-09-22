@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=82"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "codehead"
 version = "0.1.0"
@@ -22,3 +26,6 @@ codehead = "codehead.cli:main"
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

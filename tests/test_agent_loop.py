@@ -6,7 +6,7 @@ import pytest
 
 from codehead.agent import Agent, AgentLoop
 from codehead.errors import AgentAbortedError, ModelError
-from codehead.llm import LLMProvider, OpenAIProvider
+from codehead.llm import LLMProvider
 from codehead.prompt import build_system_prompt
 from codehead.session import Message, Session, ToolCall
 from codehead.tools import ReadTool, Tool, ToolRegistry, ToolSchema
@@ -131,7 +131,7 @@ def test_tool_call_result_round_trip() -> None:
     assert tool_message.tool_result.is_error is False
 
 
-def test_placeholder_tool_error_is_returned_to_model() -> None:
+def test_tool_error_is_returned_to_model(tmp_path: Path) -> None:
     provider = FakeProvider(
         [
             Message(
@@ -149,13 +149,16 @@ def test_placeholder_tool_error_is_returned_to_model() -> None:
     )
     session = Session()
 
-    result = make_loop(provider, ToolRegistry([ReadTool()])).run(session, "read")
+    result = make_loop(provider, ToolRegistry([ReadTool(tmp_path)])).run(
+        session,
+        "read",
+    )
 
     assert result == "handled"
     result_seen_by_model = provider.calls[1][0][-1].tool_result
     assert result_seen_by_model is not None
     assert result_seen_by_model.is_error is True
-    assert "not implemented" in result_seen_by_model.output
+    assert "Failed to read" in result_seen_by_model.output
 
 
 def test_multiple_tool_calls_execute_in_order() -> None:
@@ -202,13 +205,6 @@ def test_default_step_limit_aborts_repeating_tool_calls() -> None:
         )
 
     assert provider.call_count == 20
-
-
-def test_openai_provider_is_an_explicit_placeholder() -> None:
-    provider = OpenAIProvider(model="test-model")
-
-    with pytest.raises(ModelError, match="not implemented"):
-        provider.complete([], [])
 
 
 def test_system_prompt_includes_only_root_agents_file(tmp_path: Path) -> None:

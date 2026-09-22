@@ -1,4 +1,4 @@
-"""Tool interfaces, registry, and built-in placeholders."""
+"""Tool interfaces, registry, and built-in tools."""
 
 from codehead.tools.base import Tool, ToolSchema
 from codehead.tools.bash import BashTool

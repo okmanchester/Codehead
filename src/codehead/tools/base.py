@@ -2,7 +2,10 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from pathlib import Path
 from typing import Any, ClassVar
+
+from codehead.errors import ToolExecutionError
 
 type ToolSchema = dict[str, Any]
 
@@ -25,3 +28,30 @@ class Tool(ABC):
     @abstractmethod
     def execute(self, arguments: Mapping[str, Any]) -> str:
         """Execute the tool and return textual output."""
+
+
+def require_string_argument(
+    arguments: Mapping[str, Any],
+    name: str,
+    *,
+    allow_empty: bool = False,
+) -> str:
+    """Return one required string argument or raise a domain error."""
+    value = arguments.get(name)
+    if not isinstance(value, str):
+        raise ToolExecutionError(f"Tool argument '{name}' must be a string")
+    if not allow_empty and not value:
+        raise ToolExecutionError(f"Tool argument '{name}' must not be empty")
+    return value
+
+
+def resolve_workspace_path(workspace: Path, path_value: str) -> Path:
+    """Resolve a path and reject anything outside the configured workspace."""
+    candidate = Path(path_value).expanduser()
+    if not candidate.is_absolute():
+        candidate = workspace / candidate
+
+    resolved = candidate.resolve()
+    if not resolved.is_relative_to(workspace):
+        raise ToolExecutionError(f"Path is outside the workspace: {path_value}")
+    return resolved
