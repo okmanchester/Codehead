@@ -24,56 +24,78 @@ LLMStreamEvent = Annotated[
 ]
 
 
-class ModelStarted(CodeheadModel):
+class TurnEvent(CodeheadModel):
+    turn_id: str | None = None
+
+
+class TurnStarted(TurnEvent):
+    type: Literal["turn.started"] = "turn.started"
+
+
+class TurnFailed(TurnEvent):
+    type: Literal["turn.failed"] = "turn.failed"
+    reason: str
+
+
+class TurnCancelled(TurnEvent):
+    type: Literal["turn.cancelled"] = "turn.cancelled"
+
+
+class ModelStarted(TurnEvent):
     type: Literal["model.started"] = "model.started"
     step: int = Field(ge=1)
 
 
-class ContextCompactionStarted(CodeheadModel):
+class ContextCompactionStarted(TurnEvent):
     type: Literal["context.compaction_started"] = "context.compaction_started"
     step: int = Field(ge=1)
     before_tokens: int = Field(ge=0)
 
 
-class ContextCompacted(CodeheadModel):
+class ContextCompacted(TurnEvent):
     type: Literal["context.compacted"] = "context.compacted"
     step: int = Field(ge=1)
     before_tokens: int = Field(ge=0)
     after_tokens: int = Field(ge=0)
 
 
-class AssistantTextDelta(CodeheadModel):
+class AssistantTextDelta(TurnEvent):
     type: Literal["assistant.text_delta"] = "assistant.text_delta"
     step: int = Field(ge=1)
     delta: str = Field(min_length=1)
 
 
-class ModelCompleted(CodeheadModel):
+class ModelCompleted(TurnEvent):
     type: Literal["model.completed"] = "model.completed"
     step: int = Field(ge=1)
     response: LLMResponse
 
 
-class ToolStarted(CodeheadModel):
+class ToolStarted(TurnEvent):
+    execution_id: str | None = None
     type: Literal["tool.started"] = "tool.started"
     step: int = Field(ge=1)
     tool_call: ToolCall
 
 
-class ToolCompleted(CodeheadModel):
+class ToolCompleted(TurnEvent):
+    execution_id: str | None = None
     type: Literal["tool.completed"] = "tool.completed"
     step: int = Field(ge=1)
     result: ToolResult
 
 
-class TurnCompleted(CodeheadModel):
+class TurnCompleted(TurnEvent):
     type: Literal["turn.completed"] = "turn.completed"
     step: int = Field(ge=1)
     answer: str
 
 
 AgentEvent = Annotated[
-    ModelStarted
+    TurnStarted
+    | TurnFailed
+    | TurnCancelled
+    | ModelStarted
     | ContextCompactionStarted
     | ContextCompacted
     | AssistantTextDelta

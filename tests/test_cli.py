@@ -215,11 +215,7 @@ def test_partial_output_failure_closes_generator(failure) -> None:
     coroutine = run_repl(
         loop, console=Console(file=output), read_input=lambda _: next(inputs)
     )
-    if isinstance(failure, asyncio.CancelledError):
-        with pytest.raises(asyncio.CancelledError):
-            asyncio.run(coroutine)
-    else:
-        assert asyncio.run(coroutine) == 0
+    assert asyncio.run(coroutine) == 0
     assert loop.closed
     assert "partial\n" in output.getvalue()
     if isinstance(failure, ModelError):

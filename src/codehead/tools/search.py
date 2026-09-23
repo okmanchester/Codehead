@@ -1,15 +1,15 @@
 """Bounded workspace search backed by ripgrep."""
 
 import shutil
-import subprocess
 import threading
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import BinaryIO, ClassVar
 
-from codehead.errors import ToolExecutionError
+from codehead.errors import ToolCancelled, ToolCleanupError, ToolExecutionError
 from codehead.models import JsonObject, JsonValue
 from codehead.tools.base import Tool, require_string_argument, resolve_workspace_path
+from codehead.tools.process import ManagedProcess
 
 SEARCH_MAX_BYTES = 40 * 1024
 SEARCH_TIMEOUT_SECONDS = 15
@@ -74,17 +74,14 @@ class _SearchTool(Tool):
         relative = resolved.relative_to(self.workspace).as_posix()
         return relative or "."
 
-    def _run(self, args: list[str], *, grep: bool, limit: int) -> str:
+    def _run(
+        self, args: list[str], *, grep: bool, limit: int, cancel: threading.Event
+    ) -> str:
         command = [self.rg_executable, "--no-config", *args]
-        try:
-            process = subprocess.Popen(
-                command,
-                cwd=self.workspace,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-        except OSError as exc:
-            raise ToolExecutionError(f"Could not start ripgrep: {exc}") from exc
+        managed = ManagedProcess(
+            command, cwd=self.workspace, cancel=cancel, timeout=SEARCH_TIMEOUT_SECONDS
+        )
+        process = managed.process
 
         assert process.stdout is not None
         assert process.stderr is not None
@@ -97,15 +94,6 @@ class _SearchTool(Tool):
 
         worker = threading.Thread(target=drain_stderr, daemon=True)
         worker.start()
-        timed_out = threading.Event()
-
-        def timeout() -> None:
-            if process.poll() is None:
-                timed_out.set()
-                process.kill()
-
-        timer = threading.Timer(SEARCH_TIMEOUT_SECONDS, timeout)
-        timer.start()
         entries: list[str] = []
         size = 0
         capped = False
@@ -134,32 +122,38 @@ class _SearchTool(Tool):
                     break
                 entries.append(entry)
                 size += entry_size
-            if capped and process.poll() is None:
-                process.kill()
-            return_code = process.wait()
-            worker.join()
-            if timed_out.is_set():
-                raise ToolExecutionError(
-                    "ripgrep search timed out after 15 seconds; narrow the query"
-                )
-            if not capped and return_code not in (0, 1):
-                detail = stderr.decode("utf-8", errors="replace").strip()
-                raise ToolExecutionError(
-                    f"ripgrep search failed: {detail or f'exit code {return_code}'}"
-                )
             if capped:
-                entries.append(
-                    "[results truncated; narrow the path or pattern to find more]"
-                )
-            return "".join(entries) if entries else "No matches."
+                managed.stop()
+            return_code = managed.wait()
         finally:
-            timer.cancel()
-            if process.poll() is None:
-                process.kill()
-                process.wait()
-            process.stdout.close()
-            process.stderr.close()
-            worker.join()
+            try:
+                managed.close()
+            finally:
+                process.stdout.close()
+                process.stderr.close()
+                worker.join(timeout=5)
+                if worker.is_alive():
+                    raise ToolCleanupError("Search output reader did not stop")
+        if managed.cancelled:
+            raise ToolCancelled(
+                "Cancelled: search process tree stopped; partial side effects may have occurred\n"
+                + "".join(entries)
+                + stderr.decode("utf-8", errors="replace")
+            )
+        if managed.timed_out:
+            raise ToolExecutionError(
+                "ripgrep search timed out after 15 seconds; narrow the query"
+            )
+        if not capped and return_code not in (0, 1):
+            detail = stderr.decode("utf-8", errors="replace").strip()
+            raise ToolExecutionError(
+                f"ripgrep search failed: {detail or f'exit code {return_code}'}"
+            )
+        if capped:
+            entries.append(
+                "[results truncated; narrow the path or pattern to find more]"
+            )
+        return "".join(entries) if entries else "No matches."
 
     def _relative(self, raw: bytes) -> str:
         path = Path(raw.decode("utf-8", errors="replace"))
@@ -192,12 +186,18 @@ class GlobTool(_SearchTool):
     }
 
     def execute(self, arguments: Mapping[str, JsonValue]) -> str:
+        return self.execute_cancellable(arguments, threading.Event())
+
+    def execute_cancellable(
+        self, arguments: Mapping[str, JsonValue], cancel: threading.Event
+    ) -> str:
         pattern = require_string_argument(arguments, "pattern")
         path = self._path(arguments)
         return self._run(
             ["--files", "-0", "-g", pattern, "--", path],
             grep=False,
             limit=_limit(arguments),
+            cancel=cancel,
         )
 
 
@@ -221,6 +221,11 @@ class GrepTool(_SearchTool):
     }
 
     def execute(self, arguments: Mapping[str, JsonValue]) -> str:
+        return self.execute_cancellable(arguments, threading.Event())
+
+    def execute_cancellable(
+        self, arguments: Mapping[str, JsonValue], cancel: threading.Event
+    ) -> str:
         pattern = require_string_argument(arguments, "pattern")
         path = self._path(arguments)
         file_glob = arguments.get("glob")
@@ -230,4 +235,4 @@ class GrepTool(_SearchTool):
         if file_glob is not None:
             args.extend(["-g", file_glob])
         args.extend(["-e", pattern, "--", path])
-        return self._run(args, grep=True, limit=_limit(arguments))
+        return self._run(args, grep=True, limit=_limit(arguments), cancel=cancel)

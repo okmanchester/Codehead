@@ -78,6 +78,34 @@ class SQLiteSessionStore:
                         retained_sequences_json TEXT NOT NULL
                     )
                 """)
+                connection.execute("""
+                    CREATE TABLE IF NOT EXISTS turns (
+                        id TEXT PRIMARY KEY,
+                        session_id TEXT NOT NULL REFERENCES sessions(id),
+                        status TEXT NOT NULL CHECK(status IN ('running','cancelling','completed','failed','cancelled')),
+                        reason TEXT,
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                        finished_at TEXT
+                    )
+                """)
+                connection.execute("""CREATE UNIQUE INDEX IF NOT EXISTS one_live_turn
+                    ON turns(session_id) WHERE status IN ('running','cancelling')""")
+                connection.execute("""
+                    CREATE TABLE IF NOT EXISTS tool_executions (
+                        id TEXT PRIMARY KEY,
+                        turn_id TEXT NOT NULL REFERENCES turns(id),
+                        session_id TEXT NOT NULL,
+                        assistant_sequence INTEGER NOT NULL,
+                        position INTEGER NOT NULL,
+                        tool_call_id TEXT NOT NULL,
+                        status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed','cancelled','skipped')),
+                        result_sequence INTEGER,
+                        UNIQUE(turn_id, assistant_sequence, position),
+                        UNIQUE(session_id, result_sequence),
+                        FOREIGN KEY(session_id, assistant_sequence) REFERENCES messages(session_id, sequence),
+                        FOREIGN KEY(session_id, result_sequence) REFERENCES messages(session_id, sequence)
+                    )
+                """)
         except (OSError, sqlite3.Error, StorageError) as exc:
             self.close()
             raise StorageError(f"Cannot open session archive: {exc}") from exc
@@ -144,6 +172,12 @@ class SQLiteSessionStore:
     ) -> None:
         with self._transaction() as connection:
             self._touch_active(connection, session_id)
+            if connection.execute(
+                "SELECT 1 FROM tool_executions WHERE session_id = ? "
+                "AND status IN ('pending','running')",
+                (session_id,),
+            ).fetchone():
+                raise ResumeError("Cannot checkpoint an incomplete tool group")
             connection.execute(
                 """INSERT INTO checkpoints
                    (session_id, through_sequence, summary, retained_sequences_json)
@@ -182,6 +216,7 @@ class SQLiteSessionStore:
         if not math.isfinite(token_factor) or token_factor < 1.2:
             raise ResumeError("Session has an invalid token calibration factor")
         with self._transaction() as connection:
+            self._assert_settled(connection, session_id)
             result = connection.execute(
                 f"""UPDATE sessions SET status = 'closed', token_factor = ?,
                     updated_at = {_NOW} WHERE id = ? AND status = 'active'""",
@@ -223,6 +258,7 @@ class SQLiteSessionStore:
                 raise ResumeError(
                     "Session is active or was not closed normally; it cannot be resumed"
                 )
+            self._assert_settled(connection, session_id)
             records, summary, next_sequence = self._load_context(connection, session_id)
             validate_history(records)
             factor = metadata[3]
@@ -309,6 +345,130 @@ class SQLiteSessionStore:
         except (ValidationError, TypeError, ValueError) as exc:
             raise ResumeError("Session archive contains an invalid message") from exc
         return records, summary, maximum + 1
+
+    @staticmethod
+    def _assert_settled(connection: sqlite3.Connection, session_id: str) -> None:
+        if (
+            connection.execute(
+                "SELECT 1 FROM turns WHERE session_id = ? AND status IN ('running','cancelling')",
+                (session_id,),
+            ).fetchone()
+            or connection.execute(
+                "SELECT 1 FROM tool_executions WHERE session_id = ? "
+                "AND (status IN ('pending','running') OR result_sequence IS NULL)",
+                (session_id,),
+            ).fetchone()
+        ):
+            raise ResumeError("Session has an unsettled turn or tool")
+
+    def begin_turn(
+        self, session_id: str, turn_id: str, records: tuple[MessageRecord, ...]
+    ) -> None:
+        with self._transaction() as connection:
+            self._touch_active(connection, session_id)
+            self._assert_settled(connection, session_id)
+            connection.execute(
+                "INSERT INTO turns(id, session_id, status) VALUES (?, ?, 'running')",
+                (turn_id, session_id),
+            )
+            connection.executemany(
+                "INSERT INTO messages VALUES (?, ?, ?)",
+                [(session_id, seq, msg.model_dump_json()) for seq, msg in records],
+            )
+
+    def accept_response(
+        self,
+        session_id: str,
+        turn_id: str,
+        sequence: int,
+        message: Message,
+        executions: list[tuple[str, str]],
+    ) -> None:
+        with self._transaction() as connection:
+            self._touch_active(connection, session_id)
+            self._require_turn(connection, turn_id, ("running",))
+            self._require_tools_settled(connection, turn_id)
+            connection.execute(
+                "INSERT INTO messages VALUES (?, ?, ?)",
+                (session_id, sequence, message.model_dump_json()),
+            )
+            for position, (execution_id, call_id) in enumerate(executions):
+                connection.execute(
+                    """INSERT INTO tool_executions
+                    (id, turn_id, session_id, assistant_sequence, position, tool_call_id, status)
+                    VALUES (?, ?, ?, ?, ?, ?, 'pending')""",
+                    (execution_id, turn_id, session_id, sequence, position, call_id),
+                )
+            if not executions:
+                connection.execute(
+                    f"UPDATE turns SET status = 'completed', finished_at = {_NOW} WHERE id = ?",
+                    (turn_id,),
+                )
+
+    @staticmethod
+    def _require_turn(
+        connection: sqlite3.Connection, turn_id: str, statuses: tuple[str, ...]
+    ) -> None:
+        row = connection.execute(
+            "SELECT status FROM turns WHERE id = ?", (turn_id,)
+        ).fetchone()
+        if row is None or row[0] not in statuses:
+            raise ResumeError("Turn is not in the required lifecycle state")
+
+    @staticmethod
+    def _require_tools_settled(connection: sqlite3.Connection, turn_id: str) -> None:
+        if connection.execute(
+            "SELECT 1 FROM tool_executions WHERE turn_id = ? AND status IN ('pending','running')",
+            (turn_id,),
+        ).fetchone():
+            raise ResumeError("Turn has unsettled tools")
+
+    def start_tool(self, turn_id: str, execution_id: str) -> None:
+        with self._transaction() as connection:
+            self._require_turn(connection, turn_id, ("running",))
+            if (
+                connection.execute(
+                    "UPDATE tool_executions SET status = 'running' WHERE id = ? AND turn_id = ? AND status = 'pending'",
+                    (execution_id, turn_id),
+                ).rowcount
+                != 1
+            ):
+                raise ResumeError("Tool is not pending")
+
+    def complete_tool(
+        self,
+        session_id: str,
+        turn_id: str,
+        execution_id: str,
+        sequence: int,
+        message: Message,
+        outcome: str,
+    ) -> None:
+        with self._transaction() as connection:
+            self._touch_active(connection, session_id)
+            self._require_turn(connection, turn_id, ("running", "cancelling"))
+            connection.execute(
+                "INSERT INTO messages VALUES (?, ?, ?)",
+                (session_id, sequence, message.model_dump_json()),
+            )
+            if (
+                connection.execute(
+                    "UPDATE tool_executions SET status = ?, result_sequence = ? WHERE id = ? AND turn_id = ? AND status IN ('pending','running')",
+                    (outcome, sequence, execution_id, turn_id),
+                ).rowcount
+                != 1
+            ):
+                raise ResumeError("Tool result has already been committed")
+
+    def end_turn(self, turn_id: str, status: str, reason: str | None = None) -> None:
+        with self._transaction() as connection:
+            self._require_turn(connection, turn_id, ("running", "cancelling"))
+            if status != "cancelling":
+                self._require_tools_settled(connection, turn_id)
+            connection.execute(
+                f"UPDATE turns SET status = ?, reason = ?, finished_at = CASE WHEN ? = 'cancelling' THEN NULL ELSE {_NOW} END WHERE id = ?",
+                (status, reason, status, turn_id),
+            )
 
     def close(self) -> None:
         if self._connection is not None:

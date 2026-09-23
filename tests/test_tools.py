@@ -236,7 +236,7 @@ def test_bash_rejects_invalid_workdir_before_start(
 ) -> None:
     (tmp_path / "file.txt").write_text("text", encoding="utf-8")
     popen = Mock()
-    monkeypatch.setattr("codehead.tools.bash.subprocess.Popen", popen)
+    monkeypatch.setattr("codehead.tools.bash.ManagedProcess", popen)
 
     with pytest.raises(ToolExecutionError, match=error):
         BashTool(tmp_path).execute(
@@ -249,7 +249,7 @@ def test_bash_rejects_absolute_workdir_outside_workspace(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     popen = Mock()
-    monkeypatch.setattr("codehead.tools.bash.subprocess.Popen", popen)
+    monkeypatch.setattr("codehead.tools.bash.ManagedProcess", popen)
 
     with pytest.raises(ToolExecutionError, match="outside the workspace"):
         BashTool(tmp_path).execute(
@@ -410,14 +410,17 @@ def test_bash_selects_platform_shell_and_removes_api_key(
     executable: str,
 ) -> None:
     popen = Mock()
-    process = popen.return_value
+    managed = popen.return_value
+    managed.cancelled = managed.timed_out = False
+    managed.wait.return_value = 0
+    process = managed.process
     process.stdout.read.side_effect = [b"ok\n", b""]
     process.stderr.read.return_value = b""
     process.wait.return_value = 0
     process.poll.return_value = 0
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     monkeypatch.setattr("codehead.tools.bash.platform.system", lambda: system_name)
-    monkeypatch.setattr("codehead.tools.bash.subprocess.Popen", popen)
+    monkeypatch.setattr("codehead.tools.bash.ManagedProcess", popen)
 
     BashTool(tmp_path).execute({"command": "echo ok"})
 

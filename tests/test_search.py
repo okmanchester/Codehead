@@ -1,4 +1,3 @@
-import subprocess
 import sys
 from pathlib import Path
 
@@ -100,15 +99,15 @@ def test_missing_ripgrep_reports_install_requirement(
 def test_search_times_out_and_cleans_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    real_popen = subprocess.Popen
+    from codehead.tools.process import ManagedProcess
 
     def slow_process(*args, **kwargs):
-        return real_popen(
+        return ManagedProcess(
             [sys.executable, "-c", "import time; time.sleep(5)"],
             **kwargs,
         )
 
-    monkeypatch.setattr("codehead.tools.search.subprocess.Popen", slow_process)
+    monkeypatch.setattr("codehead.tools.search.ManagedProcess", slow_process)
     monkeypatch.setattr("codehead.tools.search.SEARCH_TIMEOUT_SECONDS", 0.05)
     with pytest.raises(ToolExecutionError, match="timed out"):
         GlobTool(tmp_path).execute({"pattern": "*"})

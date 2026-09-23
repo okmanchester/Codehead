@@ -190,6 +190,13 @@ def test_actual_step_exhaustion_resumes_complete_tool_results_without_reexecutio
         )
     )
     assert result == 0
+    with store._transaction() as connection:
+        assert (
+            connection.execute(
+                "SELECT status FROM turns WHERE session_id = ?", (session.id,)
+            ).fetchone()[0]
+            == "failed"
+        )
     restored = Session.resume(
         session.id,
         store=store,
@@ -264,30 +271,39 @@ def test_actual_compaction_failure_restores_previous_summary_and_active_messages
     "failure",
     [KeyboardInterrupt(), asyncio.CancelledError(), StorageError("disk failed")],
 )
-def test_execution_interrupt_or_storage_failure_never_marks_closed(setup, failure):
+def test_controlled_interrupt_returns_to_prompt_but_storage_failure_is_fatal(
+    setup, failure
+):
     config, store, session = setup
     provider = Provider([failure])
-    inputs = iter(["hello"])
+    inputs = iter(["hello", "exit"])
     coroutine = run_repl(
         loop_for(provider),
         session=session,
         console=Console(file=StringIO()),
         read_input=lambda _: next(inputs),
     )
-    if isinstance(failure, asyncio.CancelledError):
-        with pytest.raises(asyncio.CancelledError):
-            asyncio.run(coroutine)
+    fatal = isinstance(failure, StorageError)
+    assert asyncio.run(coroutine) == (1 if fatal else 0)
+    assert state(store, session) == ("active" if fatal else "closed")
+    if fatal:
+        with pytest.raises(ResumeError):
+            Session.resume(
+                session.id,
+                store=store,
+                workspace=str(config.workspace),
+                model=config.model,
+                base_url=config.base_url,
+            )
     else:
-        assert asyncio.run(coroutine) == (1 if isinstance(failure, StorageError) else 0)
-    assert state(store, session) == "active"
-    with pytest.raises(ResumeError):
-        Session.resume(
+        restored = Session.resume(
             session.id,
             store=store,
             workspace=str(config.workspace),
             model=config.model,
             base_url=config.base_url,
         )
+        assert restored.messages == session.messages
 
 
 def test_incomplete_tool_history_refuses_prompt_exit(setup):

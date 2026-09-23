@@ -12,7 +12,10 @@ from codehead.models.event import (
     ModelStarted,
     ToolCompleted,
     ToolStarted,
+    TurnCancelled,
     TurnCompleted,
+    TurnFailed,
+    TurnStarted,
 )
 from codehead.models.llm import (
     FinishReason,
@@ -62,6 +65,9 @@ __all__ = [
     "ToolMessage",
     "ToolResult",
     "ToolStarted",
+    "TurnCancelled",
     "TurnCompleted",
+    "TurnFailed",
+    "TurnStarted",
     "UserMessage",
 ]

@@ -27,6 +27,8 @@ from codehead.models import (
     ToolMessage,
     ToolStarted,
     TurnCompleted,
+    TurnFailed,
+    TurnStarted,
     UserMessage,
 )
 from codehead.prompt import build_system_prompt
@@ -349,6 +351,7 @@ def test_event_order_and_session_commit_boundaries() -> None:
             elif isinstance(event, TurnCompleted):
                 assert event.answer == "done"
         assert [type(event) for event in events] == [
+            TurnStarted,
             ModelStarted,
             AssistantTextDelta,
             ModelCompleted,
@@ -361,7 +364,9 @@ def test_event_order_and_session_commit_boundaries() -> None:
             ModelCompleted,
             TurnCompleted,
         ]
-        assert [event.step for event in events] == [1] * 7 + [2] * 4
+        assert [event.step for event in events if hasattr(event, "step")] == [1] * 7 + [
+            2
+        ] * 4
         assert tool.values == ["one", "two"]
 
     asyncio.run(check())
@@ -472,7 +477,11 @@ def test_partial_response_failure_preserves_history_and_closes_provider(
         with pytest.raises(type(failure)):
             async for event in make_loop(provider).stream(session, "new"):
                 events.append(event)
-        assert [type(event) for event in events] == [ModelStarted, AssistantTextDelta]
+        assert [type(event) for event in events] == [
+            TurnStarted,
+            ModelStarted,
+            AssistantTextDelta,
+        ] + ([TurnFailed] if isinstance(failure, Exception) else [])
         assert session.messages == (*history, UserMessage(content="new"))
         assert provider.closed
 
@@ -494,6 +503,7 @@ def test_closing_loop_stream_closes_provider_without_committing_delta() -> None:
         provider = PartialProvider()
         session = Session()
         events = make_loop(provider).stream(session, "go")
+        assert isinstance(await anext(events), TurnStarted)
         assert isinstance(await anext(events), ModelStarted)
         assert isinstance(await anext(events), AssistantTextDelta)
         await events.aclose()

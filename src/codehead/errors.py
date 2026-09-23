@@ -27,3 +27,15 @@ class StorageError(CodeheadError):
 
 class ResumeError(CodeheadError):
     """A session does not meet the conditions for safe continuation."""
+
+
+class ToolCleanupError(CodeheadError):
+    """Fatal: a tool could not be confirmed stopped."""
+
+
+class ToolCancelled(ToolExecutionError):
+    """A running command was stopped; side effects may have occurred."""
+
+
+class ToolSkipped(ToolExecutionError):
+    """Cancellation prevented execution."""

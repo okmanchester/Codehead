@@ -2,7 +2,9 @@
 
 import argparse
 import asyncio
+import signal
 import sys
+import threading
 from collections.abc import Callable
 from contextlib import aclosing
 
@@ -10,8 +12,9 @@ from rich.console import Console
 from rich.text import Text
 
 from codehead.agent import Agent, AgentLoop
+from codehead.agent.cancellation import settle
 from codehead.config import Config, LocalConfig
-from codehead.errors import CodeheadError, ResumeError, StorageError
+from codehead.errors import CodeheadError, ResumeError, StorageError, ToolCleanupError
 from codehead.llm import OpenAIProvider
 from codehead.models import (
     AssistantTextDelta,
@@ -21,6 +24,7 @@ from codehead.models import (
     SystemMessage,
     ToolCompleted,
     ToolStarted,
+    TurnCancelled,
 )
 from codehead.prompt import build_system_prompt
 from codehead.session import Session, SQLiteSessionStore
@@ -87,68 +91,131 @@ async def _run_repl(
 ) -> int:
     reader = read_input or console.input
     console.print("Codehead is ready. Type 'exit' or 'quit' to leave.")
+    current: asyncio.Task[None] | None = None
+    stopping = False
 
-    while True:
-        try:
-            user_input = reader("[bold green]You>[/bold green] ").strip()
-        except (EOFError, KeyboardInterrupt):
-            console.print()
-            return _finish_session(session, console)
+    def interrupt(signum: int, frame: object) -> None:
+        nonlocal stopping
+        if current is None:
+            signal.default_int_handler(signum, frame)
+        else:
+            console.print(Text(loop.cancellation_status(session)))
+            if not stopping:
+                stopping = True
+                if not loop.request_cancel(session):
+                    current.cancel()
 
-        if not user_input:
-            continue
-        if user_input.lower() in {"exit", "quit"}:
-            return _finish_session(session, console)
-
-        line_open = False
-        tool_names: dict[str, str] = {}
-        try:
-            async with aclosing(loop.stream(session, user_input)) as events:
-                async for event in events:
-                    if isinstance(event, AssistantTextDelta):
-                        if not line_open:
-                            console.print(Text("Codehead> ", style="bold cyan"), end="")
-                            line_open = True
-                        console.print(Text(event.delta), end="", soft_wrap=True)
-                    elif isinstance(event, ModelCompleted):
-                        if line_open:
-                            console.print()
-                            line_open = False
-                    elif isinstance(event, ContextCompactionStarted):
-                        console.print(
-                            Text(
-                                f"Context> compacting (~{event.before_tokens} input tokens)"
-                            )
-                        )
-                    elif isinstance(event, ContextCompacted):
-                        console.print(
-                            Text(
-                                f"Context> compacted: ~{event.before_tokens} -> ~{event.after_tokens} input tokens"
-                            )
-                        )
-                    elif isinstance(event, ToolStarted):
-                        tool_names[event.tool_call.id] = event.tool_call.name
-                        console.print(Text(f"Tool> {event.tool_call.name}: started"))
-                    elif isinstance(event, ToolCompleted):
-                        name = tool_names.pop(event.result.tool_call_id)
-                        status = "failed" if event.result.is_error else "succeeded"
-                        console.print(Text(f"Tool> {name}: {status}"))
-        except KeyboardInterrupt:
-            console.print()
-            return 0
-        except asyncio.CancelledError:
-            console.print()
-            raise
-        except StorageError as exc:
-            if line_open:
+    previous = None
+    if threading.current_thread() is threading.main_thread():
+        previous = signal.signal(signal.SIGINT, interrupt)
+    try:
+        while True:
+            try:
+                user_input = reader("[bold green]You>[/bold green] ").strip()
+            except (EOFError, KeyboardInterrupt):
                 console.print()
-            console.print(Text(f"Error: {exc}; session stopped", style="bold red"))
-            return 1
-        except CodeheadError as exc:
-            if line_open:
-                console.print()
-            console.print(Text(f"Error: {exc}", style="bold red"))
-            continue
+                return _finish_session(session, console)
+            if not user_input:
+                continue
+            if user_input.lower() in {"exit", "quit"}:
+                return _finish_session(session, console)
+            stopping = False
+            current = asyncio.create_task(
+                _consume_turn(loop, session, user_input, console)
+            )
+            try:
+                await asyncio.shield(current)
+            except asyncio.CancelledError:
+                # A cancelled child is a single-turn interruption. Cancellation of
+                # this REPL task additionally releases the session before escaping.
+                outer_cancelled = asyncio.current_task().cancelling() > 0
+                if not current.done() and not stopping:
+                    stopping = True
+                    console.print(Text(loop.cancellation_status(session)))
+                    current.cancel()
+                try:
+                    await settle(current)
+                except asyncio.CancelledError:
+                    pass
+                except (StorageError, ToolCleanupError) as exc:
+                    console.print(
+                        Text(
+                            f"Error: {exc}; cleanup incomplete, session cannot be resumed",
+                            style="bold red",
+                        )
+                    )
+                    if outer_cancelled:
+                        raise asyncio.CancelledError from exc
+                    return 1
+                if outer_cancelled:
+                    _finish_session(session, console)
+                    raise
+                console.print("当前回合已取消，收尾完成。")
+            except (StorageError, ToolCleanupError) as exc:
+                console.print(
+                    Text(
+                        f"Error: {exc}; cleanup incomplete, session stopped",
+                        style="bold red",
+                    )
+                )
+                return 1
+            except CodeheadError as exc:
+                console.print(Text(f"Error: {exc}", style="bold red"))
+            finally:
+                current = None
+    finally:
+        if previous is not None:
+            signal.signal(signal.SIGINT, previous)
+
+
+async def _consume_turn(
+    loop: AgentLoop, session: Session, user_input: str, console: Console
+) -> None:
+    line_open = False
+    tool_names: dict[str, str] = {}
+    try:
+        async with aclosing(loop.stream(session, user_input)) as events:
+            async for event in events:
+                if isinstance(event, AssistantTextDelta):
+                    if not line_open:
+                        console.print(Text("Codehead> ", style="bold cyan"), end="")
+                        line_open = True
+                    console.print(Text(event.delta), end="", soft_wrap=True)
+                elif isinstance(event, ModelCompleted):
+                    if line_open:
+                        console.print()
+                        line_open = False
+                elif isinstance(event, ContextCompactionStarted):
+                    console.print(
+                        Text(
+                            f"Context> compacting (~{event.before_tokens} input tokens)"
+                        )
+                    )
+                elif isinstance(event, ContextCompacted):
+                    console.print(
+                        Text(
+                            f"Context> compacted: ~{event.before_tokens} -> ~{event.after_tokens} input tokens"
+                        )
+                    )
+                elif isinstance(event, TurnCancelled):
+                    console.print("当前回合已取消，收尾完成。")
+                elif isinstance(event, ToolStarted):
+                    tool_names[event.execution_id or event.tool_call.id] = (
+                        event.tool_call.name
+                    )
+                    console.print(Text(f"Tool> {event.tool_call.name}: started"))
+                elif isinstance(event, ToolCompleted):
+                    name = tool_names.pop(
+                        event.execution_id or event.result.tool_call_id,
+                        event.result.tool_call_id,
+                    )
+                    console.print(Text(f"Tool> {name}: {event.result.outcome}"))
+    except KeyboardInterrupt as exc:
+        # Do not allow KeyboardInterrupt to escape an asyncio child Task.
+        raise asyncio.CancelledError from exc
+    finally:
+        if line_open:
+            console.print()
 
 
 def _finish_session(session: Session, console: Console) -> int:

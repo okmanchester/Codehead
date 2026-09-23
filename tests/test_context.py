@@ -32,6 +32,7 @@ from codehead.models import (
     ToolDefinition,
     ToolMessage,
     ToolStarted,
+    TurnStarted,
     UserMessage,
 )
 from codehead.session import Session, SQLiteSessionStore
@@ -112,7 +113,7 @@ def test_incremental_batched_compaction_archives_originals_without_reloading(sto
     ]
     assert events[-1].after_tokens <= 2048
     assert len(provider.calls) > 1
-    assert not any(query.lstrip().upper().startswith("SELECT") for query in queries)
+    assert not any("FROM MESSAGES" in query.upper() for query in queries)
     assert len(session.records) < len(before)
     assert session.messages[0] == before[0][1]
     assert session.messages[1].role == "user"
@@ -396,10 +397,58 @@ def test_checkpoint_failure_emits_no_success_or_normal_model_event(store):
 
     with pytest.raises(StorageError):
         asyncio.run(run())
-    assert [type(e) for e in events] == [ContextCompactionStarted]
+    assert [type(e) for e in events] == [TurnStarted, ContextCompactionStarted]
     assert session.records[:-1] == before
     assert session.summary is None
     assert checkpoint_count(store) == 0
+
+
+def test_cancel_during_summary_preserves_previous_checkpoint(store):
+    session = long_session(store)
+    session.compact("previous summary", (session.records[0], session.records[-1]))
+    for index in range(5):
+        session.add(UserMessage(content=f"question {index}: " + "x" * 2000))
+        session.add(AssistantMessage(content=f"answer {index}: " + "y" * 2000))
+    session.add(UserMessage(content="latest"))
+    previous = session.records
+    entered = asyncio.Event()
+
+    class PausedSummary(LLMProvider):
+        closed = False
+
+        async def stream(self, request):
+            try:
+                yield LLMTextDelta(delta="uncommitted summary")
+                entered.set()
+                await asyncio.Future()
+            finally:
+                self.closed = True
+
+    provider = PausedSummary()
+    loop = AgentLoop(
+        Agent(provider=provider, tools=ToolRegistry(), system_prompt="sys"),
+        context_budget=4096,
+    )
+    events = []
+
+    async def consume():
+        async for event in loop.stream(session, "new input"):
+            events.append(event)
+
+    async def run():
+        owner = asyncio.create_task(consume())
+        await entered.wait()
+        owner.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await owner
+
+    asyncio.run(run())
+    assert provider.closed
+    assert session.summary == "previous summary"
+    assert session.records[:-1] == previous
+    assert checkpoint_count(store) == 1
+    assert [type(e) for e in events] == [TurnStarted, ContextCompactionStarted]
+    session.finish()
 
 
 def test_summary_that_cannot_reach_target_is_not_committed(store):

@@ -16,6 +16,18 @@ from codehead.models import (
 )
 
 
+def test_tool_result_outcome_matches_legacy_error_flag():
+    assert ToolResult(tool_call_id="call", output="ok").outcome == "succeeded"
+    assert (
+        ToolResult(tool_call_id="call", output="error", is_error=True).outcome
+        == "failed"
+    )
+    cancelled = ToolResult(tool_call_id="call", output="stopped", outcome="cancelled")
+    assert cancelled.is_error
+    with pytest.raises(ValidationError, match="outcome and is_error disagree"):
+        ToolResult(tool_call_id="call", output="bad", outcome="skipped", is_error=False)
+
+
 def test_request_parses_messages_as_role_discriminated_union() -> None:
     request = LLMRequest.model_validate(
         {

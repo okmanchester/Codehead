@@ -443,6 +443,12 @@ def test_legacy_schema_migrates_idempotently_without_rewriting_history(tmp_path)
             with pytest.raises(ResumeError, match="Legacy"):
                 resume(migrated, tmp_path, "old")
             with migrated._transaction() as connection:
+                assert {
+                    row[0]
+                    for row in connection.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )
+                }.issuperset({"turns", "tool_executions"})
                 assert (
                     connection.execute("SELECT message_json FROM messages").fetchone()[
                         0

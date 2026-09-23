@@ -2,17 +2,16 @@
 
 import os
 import platform
-import signal
-import subprocess
 import threading
 from collections.abc import Mapping
 from pathlib import Path
 from typing import BinaryIO, ClassVar
 
-from codehead.errors import ToolExecutionError
+from codehead.errors import ToolCancelled, ToolCleanupError, ToolExecutionError
 from codehead.models import JsonObject, JsonValue
 from codehead.tools.base import Tool, require_string_argument, resolve_workspace_path
 from codehead.tools.output import TRUNCATION_MARKER
+from codehead.tools.process import ManagedProcess
 
 BASH_STREAM_MAX_BYTES = 20 * 1024
 
@@ -44,6 +43,11 @@ class BashTool(Tool):
         self.timeout_seconds = timeout_seconds
 
     def execute(self, arguments: Mapping[str, JsonValue]) -> str:
+        return self.execute_cancellable(arguments, threading.Event())
+
+    def execute_cancellable(
+        self, arguments: Mapping[str, JsonValue], cancel: threading.Event
+    ) -> str:
         command = require_string_argument(arguments, "command")
         workdir_value = arguments.get("workdir", ".")
         if not isinstance(workdir_value, str) or not workdir_value:
@@ -62,22 +66,14 @@ class BashTool(Tool):
         environment = os.environ.copy()
         environment.pop("DEEPSEEK_API_KEY", None)
 
-        try:
-            popen_options = (
-                {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
-                if os.name == "nt"
-                else {"start_new_session": True}
-            )
-            process = subprocess.Popen(
-                _shell_command(command),
-                cwd=workdir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=environment,
-                **popen_options,
-            )
-        except OSError as exc:
-            raise ToolExecutionError(f"Failed to start command: {exc}") from exc
+        managed = ManagedProcess(
+            _shell_command(command),
+            cwd=workdir,
+            cancel=cancel,
+            timeout=self.timeout_seconds,
+            env=environment,
+        )
+        process = managed.process
 
         assert process.stdout is not None and process.stderr is not None
         stdout = _BoundedBytes(BASH_STREAM_MAX_BYTES)
@@ -94,22 +90,17 @@ class BashTool(Tool):
         for reader in readers:
             reader.start()
 
-        timed_out = False
         try:
-            try:
-                returncode = process.wait(timeout=self.timeout_seconds)
-            except subprocess.TimeoutExpired:
-                timed_out = True
-                _terminate_process_tree(process)
-                returncode = process.wait()
+            returncode = managed.wait()
         finally:
-            if process.poll() is None:
-                _terminate_process_tree(process)
-                process.wait()
-            for reader in readers:
-                reader.join(timeout=2)
+            try:
+                managed.close()
+            finally:
+                for reader in readers:
+                    reader.join(timeout=5)
+        timed_out = managed.timed_out
         if any(reader.is_alive() for reader in readers):
-            raise ToolExecutionError("Failed to finish collecting command output")
+            raise ToolCleanupError("Failed to finish collecting command output")
         if read_errors:
             raise ToolExecutionError(
                 f"Failed to collect command output: {read_errors[0]}"
@@ -125,26 +116,14 @@ class BashTool(Tool):
             stdout.render(),
             stderr.render(),
         )
+        if managed.cancelled:
+            raise ToolCancelled(
+                "Cancelled: process tree stopped; partial side effects may have occurred\n"
+                + output
+            )
         if timed_out or returncode != 0:
             raise ToolExecutionError(output)
         return output
-
-
-def _terminate_process_tree(process: subprocess.Popen[bytes]) -> None:
-    """Stop descendants that may still hold the output pipes open."""
-    if os.name == "nt":
-        try:
-            process.send_signal(signal.CTRL_BREAK_EVENT)
-            process.wait(timeout=1)
-        except (OSError, ValueError, subprocess.TimeoutExpired):
-            pass
-    else:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-    if process.poll() is None:
-        process.kill()
 
 
 def _shell_command(command: str) -> list[str]:

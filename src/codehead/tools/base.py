@@ -4,9 +4,10 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
+from threading import Event
 from typing import ClassVar
 
-from codehead.errors import ToolExecutionError
+from codehead.errors import ToolExecutionError, ToolSkipped
 from codehead.models import JsonObject, JsonValue, ToolDefinition
 
 
@@ -24,6 +25,16 @@ class Tool(ABC):
             description=self.description,
             parameters=deepcopy(self.parameters),
         )
+
+    def execute_cancellable(
+        self, arguments: Mapping[str, JsonValue], cancel: Event
+    ) -> str:
+        """Once started, synchronous file operations must report their real result."""
+        if cancel.is_set():
+            raise ToolSkipped(
+                "Skipped: cancellation requested before execution; tool did not run"
+            )
+        return self.execute(arguments)
 
     @abstractmethod
     def execute(self, arguments: Mapping[str, JsonValue]) -> str:

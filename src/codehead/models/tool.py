@@ -1,8 +1,9 @@
 """Provider-independent tool calling models."""
 
 from copy import deepcopy
+from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from codehead.models._base import CodeheadModel
 
@@ -45,3 +46,19 @@ class ToolResult(CodeheadModel):
     tool_call_id: str = Field(min_length=1)
     output: str
     is_error: bool = False
+
+    outcome: Literal["succeeded", "failed", "cancelled", "skipped"] = "succeeded"
+
+    @model_validator(mode="before")
+    @classmethod
+    def execution_outcome(cls, value: object) -> object:
+        if isinstance(value, dict):
+            value = dict(value)
+            value.setdefault(
+                "outcome", "failed" if value.get("is_error") else "succeeded"
+            )
+            error = value["outcome"] != "succeeded"
+            if "is_error" in value and value["is_error"] != error:
+                raise ValueError("outcome and is_error disagree")
+            value["is_error"] = error
+        return value

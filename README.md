@@ -80,14 +80,16 @@ PowerShell，Unix 使用 Bash。
 
 Provider 和 AgentLoop 使用异步流，事件类型统一从 `codehead.models` 导入。
 Provider 输出 `LLMTextDelta`，最后输出一次 `LLMResponseCompleted`；Loop 输出
-`ModelStarted`、`AssistantTextDelta`、`ModelCompleted`、`ToolStarted`、
-`ToolCompleted` 和最终的 `TurnCompleted`，以及压缩期间的
+`TurnStarted`、`ModelStarted`、`AssistantTextDelta`、`ModelCompleted`、`ToolStarted`、
+`ToolCompleted` 和最终的 `TurnCompleted`，以及失败或取消时的 `TurnFailed` / `TurnCancelled`、压缩期间的
 `ContextCompactionStarted` / `ContextCompacted`。`step` 从 1 开始，表示本回合第几次
 正常模型调用；摘要请求不占用 `max_steps`，摘要增量不作为助手答案展示。
 
 文本增量仅用于即时展示。Loop 校验完整响应的 FinishReason 后才保存 assistant
 消息、发送 `ModelCompleted` 和执行工具；工具结果保存后才发送 `ToolCompleted`。
-CLI 不重复打印完成事件中的文本，也不默认展开工具输出。模型失败和步数耗尽仍通过
+CLI 不重复打印完成事件中的文本，也不默认展开工具输出。事件包含回合 ID，工具事件还包含执行记录 ID；
+`ToolCompleted.result.outcome` 区分 `succeeded`、`failed`、`cancelled` 和 `skipped`。
+模型失败和步数耗尽仍通过
 异常报告；CLI 会显示回合错误并继续使用同一 Session，保留本轮 user 消息及此前已提交
 的工具历史，不自动重试。工具业务失败通过 `ToolResult.is_error` 回传模型。
 
@@ -106,18 +108,26 @@ async def consume_turn(loop, session, user_input):
 所有回合结束后，调用方须在 `finally` 中 `await loop.aclose()`（直接使用 Provider
 则调用 `provider.aclose()`）。CLI 已负责这一清理。外部注入的 SDK 客户端由注入方关闭。
 
-一个 Session 同时仅支持一个回合。同步工具在线程中按顺序执行；中断不能强制停止
-已经启动的工具，也不能撤销其副作用，退出时可能需要等待该工具结束。首版中断后
-退出 CLI，不支持恢复中断的 Session。事件未持久化，不支持重放。
+一个 Session 同时仅支持一个回合。同步工具在线程中按顺序执行。执行期间第一次 Ctrl+C
+请求取消当前回合；再次按下时仅显示收尾状态。文件工具一旦启动，会等待真实结果并保存；
+`bash`、`glob` 和 `grep` 会停止受管理的进程树。尚未启动的调用记录为 `skipped`。
+工具副作用不会回滚，已停止命令可能留下部分副作用。收尾完成后 CLI 回到输入提示，
+可开始新回合或正常退出。收尾期间输入提示不会提前出现。数据库无法写入或无法确认
+进程树已停止时，会报告收尾失败并拒绝宣称会话可恢复。事件未持久化，不支持重放。
+
+嵌入调用取消 `AgentLoop.stream()` / `run()` 后，可继续使用已收尾的同一个 Session。
+调用方应使用 `contextlib.aclosing` 关闭提前停止的流，并在有序退出前调用
+`session.finish()`；`close()` 仅释放资源，不提交正常退出状态。取消整个 CLI REPL 时，
+先等待当前回合收尾，再提交会话退出状态和关闭资源。
 
 ## 上下文与会话存档
 
 CLI 将原始消息保存到 workspace 下的 `.codehead/sessions.sqlite3`，默认启动创建
 新的会话。`CODEHEAD_SESSION_DB` 可覆盖数据库位置；相对路径以 workspace 为基准。
-数据库保存会话元数据、按序号追加的消息，以及摘要和保留消息序号组成的压缩检查点。
+数据库保存会话元数据、按序号追加的消息、压缩检查点，以及新回合与工具执行状态。
 这里的原始消息指已通过响应校验的完整消息，以及经过现有输出限制处理的工具结果，
 不包含流式片段或被工具输出治理截掉的内容。支持正常退出后的会话续聊，尚不支持
-历史检索或执行中断恢复；数据库不会自动清理。
+历史检索、崩溃后自动恢复或已有遗留 `active` 会话的恢复；数据库不会自动清理。
 
 `Session.messages` 现在表示活跃请求上下文。压缩成功后，Python 内存只保留摘要、
 system prompt、最新用户输入和近期消息，旧消息继续保存在数据库中，不在请求路径
@@ -157,11 +167,13 @@ codehead --resume <完整会话ID>    # 继续一个正常关闭的会话
 新会话。`--resume` 和 `--list-sessions` 不能同时使用。不支持 ID 前缀匹配、
 自动选择最近会话或跨 workspace 恢复；指定 ID 无效时会报错，不会新建会话。
 
-只有在输入提示处输入 `exit` / `quit`、收到 EOF 或按 Ctrl+C，且已记录的工具调用
-都有对应结果时，才将会话标记为 `closed`。模型错误、压缩失败或步数耗尽后返回
+只有在输入提示处输入 `exit` / `quit`、收到 EOF 或按 Ctrl+C，且没有运行中回合、
+已记录的工具调用都有对应结果时，才将会话标记为 `closed`。模型错误、压缩失败、
+步数耗尽或已收尾的执行中断后返回
 输入提示，仍可正常退出并在下次恢复；历史末尾可以是未获回答的用户输入或完整的
-工具结果组。执行期间的 Ctrl+C、取消、数据库故障或进程异常退出不会写入正常退出
-标记，这些会话保留为 `active`，首版拒绝恢复，也不提供强制解锁。
+工具结果组。执行期间的可控中断先收尾回合，再由用户在输入提示处正常退出。
+数据库故障、无法确认工具停止或进程异常退出不会写入正常退出标记，这些会话保留为
+`active` 并拒绝恢复；不提供强制解锁。旧存档保持原样，新回合才产生 Turn / Tool 状态记录。
 
 恢复会沿用原会话 ID 和消息序号。已有压缩检查点时，只加载最新摘要、保留消息及
 检查点之后的新增消息，不重新加载被压缩的原文；无检查点则加载尚未压缩的历史。
@@ -202,6 +214,9 @@ limit=100)` 使用区分大小写的逐行正则搜索并返回 `路径:行号:�
 
 `bash` 持续排空 stdout 和 stderr，各保留最多 20 KiB 的头尾片段，等待真实退出码或
 60 秒超时。`workdir` 只对本次调用生效，不会改变后续命令的默认目录。
+`bash` 与检索工具使用同一进程管理层。Unix 使用独立进程组，取消时先发送终止信号，
+1 秒后强制终止仍存活的进程；Windows 使用 Job Object 回收命令及子进程，命令在
+成功加入 Job 后才获得启动许可。工具不能保证管理主动脱离进程组的 Unix 子进程。
 `edit` 仅替换唯一精确匹配；找不到文本时会提示重新用 `read` 或 `grep` 定位，
 多处匹配时列出最多 5 个行列位置和短上下文供修正。相同的新旧文本会报错，
 上述失败都不会写文件。`write` 与成功的 `edit` 仍返回简短摘要。
