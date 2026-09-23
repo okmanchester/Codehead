@@ -23,3 +23,7 @@ class ContextError(CodeheadError):
 
 class StorageError(CodeheadError):
     """Fatal session archive failure; the session must not be continued."""
+
+
+class ResumeError(CodeheadError):
+    """A session does not meet the conditions for safe continuation."""

@@ -1,6 +1,8 @@
 """Command-line entry point for Codehead."""
 
+import argparse
 import asyncio
+import sys
 from collections.abc import Callable
 from contextlib import aclosing
 
@@ -8,14 +10,15 @@ from rich.console import Console
 from rich.text import Text
 
 from codehead.agent import Agent, AgentLoop
-from codehead.config import Config
-from codehead.errors import CodeheadError, StorageError
+from codehead.config import Config, LocalConfig
+from codehead.errors import CodeheadError, ResumeError, StorageError
 from codehead.llm import OpenAIProvider
 from codehead.models import (
     AssistantTextDelta,
     ContextCompacted,
     ContextCompactionStarted,
     ModelCompleted,
+    SystemMessage,
     ToolCompleted,
     ToolStarted,
 )
@@ -90,12 +93,12 @@ async def _run_repl(
             user_input = reader("[bold green]You>[/bold green] ").strip()
         except (EOFError, KeyboardInterrupt):
             console.print()
-            return 0
+            return _finish_session(session, console)
 
         if not user_input:
             continue
         if user_input.lower() in {"exit", "quit"}:
-            return 0
+            return _finish_session(session, console)
 
         line_open = False
         tool_names: dict[str, str] = {}
@@ -148,9 +151,68 @@ async def _run_repl(
             continue
 
 
-async def _main() -> int:
+def _finish_session(session: Session, console: Console) -> int:
+    try:
+        session.finish()
+    except (ResumeError, StorageError) as exc:
+        console.print(
+            Text(f"Error: {exc}; session cannot be resumed", style="bold red")
+        )
+        return 1
+    return 0
+
+
+def _parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="codehead")
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument(
+        "--list-sessions",
+        action="store_true",
+        help="List sessions in the current workspace",
+    )
+    modes.add_argument(
+        "--resume", metavar="ID", help="Resume a normally closed session by its full ID"
+    )
+    return parser.parse_args(argv)
+
+
+def _list_sessions(console: Console) -> int:
+    try:
+        config = LocalConfig.from_env()
+        if not config.session_db_path.exists():
+            console.print("No sessions in this workspace.")
+            return 0
+        store = SQLiteSessionStore(config.session_db_path)
+        try:
+            sessions = store.list_sessions(str(config.workspace))
+        finally:
+            store.close()
+        if not sessions:
+            console.print("No sessions in this workspace.")
+        for info in sessions:
+            status = {
+                "legacy": "legacy (exit status unknown)",
+                "active": "active (running or not closed normally)",
+                "closed": "closed",
+            }.get(info.status, info.status)
+            console.print(
+                Text(
+                    f"{info.id}  {info.updated_at} UTC  {info.model or '-'}  {status}"
+                ),
+                soft_wrap=True,
+            )
+    except (CodeheadError, ValueError) as exc:
+        console.print(Text(f"Error: {exc}", style="bold red"))
+        return 1
+    return 0
+
+
+async def _main(argv: list[str] | None = None) -> int:
     """Load configuration and start the interactive CLI."""
     console = Console()
+    args = _parse_args(argv or [])
+    if args.list_sessions:
+        return _list_sessions(console)
     try:
         config = Config.from_env()
         loop = build_agent_loop(config)
@@ -160,13 +222,39 @@ async def _main() -> int:
     try:
         store = SQLiteSessionStore(config.session_db_path)
         try:
-            session = Session(
-                store=store, workspace=str(config.workspace), model=config.model
-            )
+            if args.resume is not None:
+                current_prompt = build_system_prompt(config.workspace)
+                session = Session.resume(
+                    args.resume,
+                    store=store,
+                    workspace=str(config.workspace),
+                    model=config.model,
+                    base_url=config.base_url,
+                )
+                console.print(Text(f"Resumed session: {session.id}"))
+                if session.model_changed:
+                    console.print(
+                        "Model or endpoint changed; using current configuration and resetting token calibration."
+                    )
+                saved_prompts = [
+                    m.content for m in session.messages if isinstance(m, SystemMessage)
+                ]
+                if saved_prompts and saved_prompts != [current_prompt]:
+                    console.print(
+                        "System instructions changed; continuing with the archived instructions. Start a new session to use the current instructions."
+                    )
+            else:
+                session = Session(
+                    store=store,
+                    workspace=str(config.workspace),
+                    model=config.model,
+                    base_url=config.base_url,
+                )
+                console.print(Text(f"New session: {session.id}"))
             return await run_repl(loop, console=console, session=session)
         finally:
             store.close()
-    except StorageError as exc:
+    except (ResumeError, StorageError) as exc:
         console.print(Text(f"Error: {exc}", style="bold red"))
         return 1
     finally:
@@ -176,7 +264,7 @@ async def _main() -> int:
 def main() -> int:
     """Own one event loop for the entire CLI session."""
     try:
-        return asyncio.run(_main())
+        return asyncio.run(_main(sys.argv[1:]))
     except KeyboardInterrupt:
         return 0
 
