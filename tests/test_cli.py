@@ -5,7 +5,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from rich.console import Console
 
-from codehead.cli import _main, main, run_repl
+from codehead.cli import _main, build_agent_loop, main, run_repl
+from codehead.config import Config
 from codehead.errors import ModelError
 from codehead.models import (
     AssistantMessage,
@@ -18,6 +19,7 @@ from codehead.models import (
     ToolResult,
     ToolStarted,
     TurnCompleted,
+    UserMessage,
 )
 from codehead.session import Session
 
@@ -67,20 +69,60 @@ def test_repl_keeps_one_session_and_handles_exit() -> None:
     assert output.getvalue().count("answer: second") == 1
 
 
-def test_repl_returns_nonzero_for_model_error() -> None:
+def test_repl_continues_after_model_error() -> None:
     output = StringIO()
     console = Console(file=output, force_terminal=False, color_system=None)
+    inputs = iter(["hello", "quit"])
 
     exit_code = asyncio.run(
         run_repl(
             FailingLoop(),  # type: ignore[arg-type]
             console=console,
-            read_input=lambda prompt: "hello",
+            read_input=lambda prompt: next(inputs),
         )
     )
 
-    assert exit_code == 1
+    assert exit_code == 0
     assert "Error: unavailable" in output.getvalue()
+
+
+def test_repl_reuses_session_with_failed_turn_history() -> None:
+    output = StringIO()
+
+    class RecoveringLoop:
+        session: Session | None = None
+
+        async def stream(self, session: Session, user_input: str):
+            if self.session is None:
+                self.session = session
+                session.add(UserMessage(content=user_input))
+                raise ModelError("temporary failure")
+            assert session is self.session
+            assert [message.content for message in session.messages] == ["first"]
+            session.add(UserMessage(content=user_input))
+            yield AssistantTextDelta(step=1, delta="recovered")
+            yield ModelCompleted(
+                step=1,
+                response=LLMResponse(
+                    message=AssistantMessage(content="recovered"),
+                    finish_reason=FinishReason.END_TURN,
+                ),
+            )
+            yield TurnCompleted(step=1, answer="recovered")
+
+    inputs = iter(["first", "second", "quit"])
+    loop = RecoveringLoop()
+    result = asyncio.run(
+        run_repl(
+            loop,  # type: ignore[arg-type]
+            console=Console(file=output, force_terminal=False),
+            read_input=lambda _: next(inputs),
+        )
+    )
+    assert result == 0
+    assert "Error: temporary failure" in output.getvalue()
+    assert "recovered" in output.getvalue()
+    assert [message.content for message in loop.session.messages] == ["first", "second"]
 
 
 def test_repl_treats_eof_as_normal_exit() -> None:
@@ -167,14 +209,15 @@ def test_partial_output_failure_closes_generator(failure) -> None:
                 self.closed = True
 
     loop = InterruptedLoop()
+    inputs = iter(["hello", "quit"])
     coroutine = run_repl(
-        loop, console=Console(file=output), read_input=lambda _: "hello"
+        loop, console=Console(file=output), read_input=lambda _: next(inputs)
     )
     if isinstance(failure, asyncio.CancelledError):
         with pytest.raises(asyncio.CancelledError):
             asyncio.run(coroutine)
     else:
-        assert asyncio.run(coroutine) == (1 if isinstance(failure, ModelError) else 0)
+        assert asyncio.run(coroutine) == 0
     assert loop.closed
     assert "partial\n" in output.getvalue()
     if isinstance(failure, ModelError):
@@ -203,3 +246,15 @@ def test_main_closes_loop_on_exit_and_failure(failure) -> None:
 def test_main_treats_keyboard_interrupt_as_normal_exit() -> None:
     with patch("codehead.cli._main", side_effect=KeyboardInterrupt):
         assert main() == 0
+
+
+def test_startup_requires_ripgrep(tmp_path) -> None:
+    config = Config(api_key="test", workspace=tmp_path)
+    with (
+        patch(
+            "codehead.cli.find_ripgrep",
+            side_effect=ValueError("ripgrep (rg) is required"),
+        ),
+        pytest.raises(ValueError, match="ripgrep"),
+    ):
+        build_agent_loop(config)

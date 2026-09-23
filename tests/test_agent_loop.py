@@ -199,7 +199,7 @@ def test_tool_error_is_returned_to_model(tmp_path: Path) -> None:
     result_seen_by_model = provider.calls[1].messages[-1]
     assert isinstance(result_seen_by_model, ToolMessage)
     assert result_seen_by_model.is_error is True
-    assert "Failed to read" in result_seen_by_model.content
+    assert "File not found" in result_seen_by_model.content
 
 
 def test_multiple_tool_calls_execute_in_order() -> None:

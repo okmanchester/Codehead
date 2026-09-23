@@ -19,11 +19,21 @@ from codehead.models import (
 )
 from codehead.prompt import build_system_prompt
 from codehead.session import Session
-from codehead.tools import BashTool, EditTool, ReadTool, ToolRegistry, WriteTool
+from codehead.tools import (
+    BashTool,
+    EditTool,
+    GlobTool,
+    GrepTool,
+    ReadTool,
+    ToolRegistry,
+    WriteTool,
+)
+from codehead.tools.search import find_ripgrep
 
 
 def build_agent_loop(config: Config) -> AgentLoop:
     """Construct the v0.1 agent and its built-in tools."""
+    rg_executable = find_ripgrep()
     provider = OpenAIProvider(
         model=config.model,
         api_key=config.api_key,
@@ -33,6 +43,8 @@ def build_agent_loop(config: Config) -> AgentLoop:
     tools = ToolRegistry(
         [
             ReadTool(config.workspace),
+            GlobTool(config.workspace, rg_executable),
+            GrepTool(config.workspace, rg_executable),
             WriteTool(config.workspace),
             EditTool(config.workspace),
             BashTool(config.workspace),
@@ -100,7 +112,7 @@ async def run_repl(
             if line_open:
                 console.print()
             console.print(Text(f"Error: {exc}", style="bold red"))
-            return 1
+            continue
 
 
 async def _main() -> int:

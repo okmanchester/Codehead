@@ -44,7 +44,7 @@ def test_write_read_and_edit_round_trip(tmp_path: Path) -> None:
         {"path": "nested/example.txt", "content": "hello world"}
     )
     assert "11 characters" in write_result
-    assert read.execute({"path": "nested/example.txt"}) == "hello world"
+    assert read.execute({"path": "nested/example.txt"}) == "1: hello world\n"
 
     edit_result = edit.execute(
         {
@@ -59,7 +59,7 @@ def test_write_read_and_edit_round_trip(tmp_path: Path) -> None:
         else "nested/example.txt"
     )
     assert edit_result == f"Edited {expected_path}"
-    assert read.execute({"path": "nested/example.txt"}) == "hello Codehead"
+    assert read.execute({"path": "nested/example.txt"}) == "1: hello Codehead\n"
 
 
 @pytest.mark.parametrize("tool_type", [ReadTool, WriteTool, EditTool])
@@ -81,7 +81,7 @@ def test_file_tools_reject_paths_outside_workspace(
 
 
 def test_read_reports_missing_file(tmp_path: Path) -> None:
-    with pytest.raises(ToolExecutionError, match="Failed to read"):
+    with pytest.raises(ToolExecutionError, match="File not found"):
         ReadTool(tmp_path).execute({"path": "missing.txt"})
 
 
@@ -128,8 +128,8 @@ def test_read_limits_source_bytes_and_marks_truncation(tmp_path: Path) -> None:
 
     result = ReadTool(tmp_path).execute({"path": "large.txt"})
 
-    assert result.startswith("界" * 100)
-    assert "[output truncated]" in result
+    assert result.startswith("1: " + "界" * 100)
+    assert "[line truncated" in result
     assert "unread tail" not in result
     assert len(result.encode("utf-8")) < 50 * 1024
 
@@ -138,12 +138,84 @@ def test_read_exact_byte_boundary_and_invalid_utf8(tmp_path: Path) -> None:
     path = tmp_path / "boundary.txt"
     path.write_bytes("界".encode() * (40 * 1024 // 3) + b"a")
     result = ReadTool(tmp_path).execute({"path": "boundary.txt"})
-    assert result == path.read_text(encoding="utf-8")
-    assert "truncated" not in result
+    assert result.startswith("1: " + "界" * 100)
+    assert "[line truncated" in result
 
     path.write_bytes(b"valid\xffinvalid")
-    with pytest.raises(ToolExecutionError, match="Failed to read"):
+    with pytest.raises(ToolExecutionError, match="Invalid UTF-8"):
         ReadTool(tmp_path).execute({"path": "boundary.txt"})
+
+
+def test_read_pages_numbered_lines_and_reports_next_offset(tmp_path: Path) -> None:
+    (tmp_path / "lines.txt").write_text("a\nb\nc\n", encoding="utf-8")
+    tool = ReadTool(tmp_path)
+
+    assert tool.execute({"path": "lines.txt", "limit": 2}) == (
+        "1: a\n2: b\n"
+        "[output truncated; more lines available. Continue read on the same path "
+        "with next_offset=3, limit=2]"
+    )
+    assert tool.execute({"path": "lines.txt", "offset": 3, "limit": 2}) == "3: c\n"
+    assert "end of file" in tool.execute({"path": "lines.txt", "offset": 4})
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        {"offset": 0},
+        {"offset": True},
+        {"limit": 0},
+        {"limit": 501},
+        {"limit": "2"},
+    ],
+)
+def test_read_rejects_invalid_pagination(
+    tmp_path: Path, arguments: dict[str, object]
+) -> None:
+    (tmp_path / "file.txt").write_text("text", encoding="utf-8")
+    with pytest.raises(ToolExecutionError, match="must be an integer"):
+        ReadTool(tmp_path).execute({"path": "file.txt", **arguments})
+
+
+def test_read_distinguishes_directory_and_binary(tmp_path: Path) -> None:
+    (tmp_path / "binary.bin").write_bytes(b"hello\0world")
+    tool = ReadTool(tmp_path)
+    with pytest.raises(ToolExecutionError, match="Is a directory"):
+        tool.execute({"path": "."})
+    with pytest.raises(ToolExecutionError, match="Binary file"):
+        tool.execute({"path": "binary.bin"})
+
+
+def test_read_classifies_other_io_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    path = tmp_path / "file.txt"
+    path.write_text("text", encoding="utf-8")
+    original_open = Path.open
+
+    def denied_open(self: Path, *args, **kwargs):
+        if self == path:
+            raise PermissionError("denied")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", denied_open)
+    with pytest.raises(ToolExecutionError, match="Could not read.*denied"):
+        ReadTool(tmp_path).execute({"path": "file.txt"})
+
+
+def test_read_exact_2_kib_line_is_complete(tmp_path: Path) -> None:
+    (tmp_path / "boundary.txt").write_bytes(b"a" * (2 * 1024) + b"\nnext\n")
+    result = ReadTool(tmp_path).execute({"path": "boundary.txt"})
+    assert "1: " + "a" * (2 * 1024) + "\n" in result
+    assert "2: next\n" in result
+    assert "line truncated" not in result
+
+
+def test_read_output_stays_within_40_kib_and_continues(tmp_path: Path) -> None:
+    (tmp_path / "many.txt").write_text(("界" * 600 + "\n") * 500, encoding="utf-8")
+    result = ReadTool(tmp_path).execute({"path": "many.txt", "limit": 500})
+    assert len(result.encode("utf-8")) <= 40 * 1024
+    assert "next_offset=" in result
 
 
 @pytest.mark.parametrize("exit_code", [0, 3])

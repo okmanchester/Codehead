@@ -62,6 +62,7 @@ Codehead 正处于早期开发阶段。
 ```powershell
 conda activate codehead
 python -m pip install -e . --no-build-isolation
+# 另需安装 ripgrep，并确保 rg 可从 PATH 调用
 $env:DEEPSEEK_API_KEY = "your-api-key"
 codehead
 ```
@@ -69,7 +70,9 @@ codehead
 Codehead 默认使用 `deepseek-flash` 和 `https://api.deepseek.com`。可通过
 `CODEHEAD_MODEL`、`DEEPSEEK_BASE_URL` 和 `CODEHEAD_WORKSPACE` 覆盖默认值。
 
-当前 `read`、`write` 和 `edit` 工具只能访问 workspace 内的文件。`bash` 工具
+当前 `read`、`write`、`edit`、`glob` 和 `grep` 工具只能访问 workspace 内的文件。
+`glob` 和 `grep` 依赖系统安装的 [ripgrep](https://github.com/BurntSushi/ripgrep)；
+启动时若找不到 `rg` 会明确报错。`bash` 工具
 以 workspace 为工作目录，但不提供进程沙箱；Windows 使用 PowerShell，Unix
 使用 Bash。
 
@@ -83,7 +86,8 @@ Provider 输出 `LLMTextDelta`，最后输出一次 `LLMResponseCompleted`；Loo
 文本增量仅用于即时展示。Loop 校验完整响应的 FinishReason 后才保存 assistant
 消息、发送 `ModelCompleted` 和执行工具；工具结果保存后才发送 `ToolCompleted`。
 CLI 不重复打印完成事件中的文本，也不默认展开工具输出。模型失败和步数耗尽仍通过
-异常报告；工具业务失败通过 `ToolResult.is_error` 回传模型。
+异常报告；CLI 会显示回合错误并继续使用同一 Session，保留本轮 user 消息及此前已提交
+的工具历史，不自动重试。工具业务失败通过 `ToolResult.is_error` 回传模型。
 
 `complete(request)` 和 `run(session, user_input)` 现在必须 `await`，内部消费同一条
 流式路径。直接消费事件时，使用 `contextlib.aclosing` 保证提前退出也能关闭流：
@@ -110,6 +114,15 @@ async def consume_turn(loop, session, user_input):
 发送 `ToolCompleted` 事件和写入 Session 前，将结果限制在 50 KiB UTF-8 字节以内，
 截断时保留开头、末尾及明确标记。截断不会改变工具实际执行的成功或失败状态。
 
-`read` 只读取文件开头最多 40 KiB；大文件结果会标记截断。`bash` 持续排空 stdout
-和 stderr，各保留最多 20 KiB 的头尾片段，等待真实退出码或 60 秒超时。
-`write` 与 `edit` 仍返回简短摘要。完整大文件内容需要在后续版本引入范围读取能力。
+`read(path, offset=1, limit=200)` 按行读取并附行号，`offset` 从 1 开始，`limit`
+最大 500。每次输出至多 40 KiB；单行只展示前 2 KiB，标注不完整。有后续行时返回
+`next_offset` 和 `limit`，可用相同路径继续读取，不统计剩余总行数。文件不存在、目录、
+二进制内容和无效 UTF-8 分别返回可区分的工具错误。
+
+`glob(pattern, path=".", limit=100)` 查找文件；`grep(pattern, path=".", glob=None,
+limit=100)` 使用区分大小写的逐行正则搜索并返回 `路径:行号:预览`。两者最多返回
+200 条和 40 KiB，搜索 15 秒超时。搜索遵循 ripgrep 默认的忽略、隐藏文件、二进制文件
+及符号链接规则；显式 glob 可能覆盖部分忽略规则。超限时需缩小路径或模式。
+
+`bash` 持续排空 stdout 和 stderr，各保留最多 20 KiB 的头尾片段，等待真实退出码或
+60 秒超时。`write` 与 `edit` 仍返回简短摘要。
