@@ -7,7 +7,7 @@ from typing import ClassVar
 import pytest
 
 from codehead.agent import Agent, AgentLoop
-from codehead.errors import AgentAbortedError, ModelError
+from codehead.errors import AgentAbortedError, ModelError, ToolExecutionError
 from codehead.llm import LLMProvider
 from codehead.models import (
     AssistantMessage,
@@ -388,6 +388,60 @@ def test_failed_tool_emits_result_and_model_can_finish() -> None:
         assert "Unknown tool" in result.output
         assert provider.calls[1].messages[-1].is_error
         assert isinstance(events[-1], TurnCompleted)
+
+    asyncio.run(check())
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_tool_event_and_session_receive_the_same_bounded_result(
+    failure: bool,
+) -> None:
+    async def check():
+        class LargeTool(RecordingTool):
+            def execute(self, arguments):
+                output = "HEAD" + "界" * 50000 + "TAIL"
+                if failure:
+                    raise ToolExecutionError(output)
+                return output
+
+        provider = FakeProvider(
+            [
+                response(
+                    AssistantMessage(
+                        tool_calls=(
+                            ToolCall(
+                                id="large",
+                                name="record",
+                                arguments={"value": "small"},
+                            ),
+                        )
+                    ),
+                    FinishReason.TOOL_CALLS,
+                ),
+                response(AssistantMessage(content="done")),
+            ]
+        )
+        session = Session()
+        events = [
+            event
+            async for event in make_loop(provider, ToolRegistry([LargeTool()])).stream(
+                session, "go"
+            )
+        ]
+        result = next(
+            event.result for event in events if isinstance(event, ToolCompleted)
+        )
+        tool_message = next(
+            message for message in session.messages if isinstance(message, ToolMessage)
+        )
+        assert result.is_error is failure
+        assert result.output == tool_message.content
+        assert tool_message.is_error is failure
+        assert tool_message == provider.calls[1].messages[-1]
+        assert len(tool_message.content.encode("utf-8")) <= 50 * 1024
+        assert result.output.startswith("HEAD")
+        assert result.output.endswith("TAIL")
+        assert "[output truncated]" in result.output
 
     asyncio.run(check())
 

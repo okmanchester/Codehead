@@ -1,15 +1,14 @@
 """Registration and dispatch for tools."""
 
 from collections.abc import Iterable
-from copy import deepcopy
 
 from codehead.errors import ToolExecutionError
-from codehead.models import ToolCall, ToolDefinition, ToolResult
+from codehead.models import ToolDefinition
 from codehead.tools.base import Tool
 
 
 class ToolRegistry:
-    """Store tools by name and dispatch model tool calls."""
+    """Store tools by name and provide definitions for model requests."""
 
     def __init__(self, tools: Iterable[Tool] = ()) -> None:
         self._tools: dict[str, Tool] = {}
@@ -32,17 +31,3 @@ class ToolRegistry:
     def definitions(self) -> tuple[ToolDefinition, ...]:
         """Return tool definitions in registration order."""
         return tuple(tool.definition() for tool in self._tools.values())
-
-    def execute(self, tool_call: ToolCall) -> ToolResult:
-        """Execute a tool call and associate its output with the call id."""
-        tool = self.get(tool_call.name)
-        try:
-            output = tool.execute(deepcopy(tool_call.arguments))
-        except ToolExecutionError:
-            raise
-        except Exception as exc:
-            raise ToolExecutionError(
-                f"Tool '{tool_call.name}' failed: {exc}"
-            ) from exc
-
-        return ToolResult(tool_call_id=tool_call.id, output=output)

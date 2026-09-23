@@ -1,7 +1,5 @@
 import platform
-import subprocess
 from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -93,19 +91,13 @@ def test_edit_requires_one_unique_match(tmp_path: Path) -> None:
     tool = EditTool(tmp_path)
 
     with pytest.raises(ToolExecutionError, match="2 times"):
-        tool.execute(
-            {"path": "example.txt", "old_text": "same", "new_text": "new"}
-        )
+        tool.execute({"path": "example.txt", "old_text": "same", "new_text": "new"})
     with pytest.raises(ToolExecutionError, match="not found"):
-        tool.execute(
-            {"path": "example.txt", "old_text": "missing", "new_text": "new"}
-        )
+        tool.execute({"path": "example.txt", "old_text": "missing", "new_text": "new"})
 
 
 def test_bash_executes_successful_command(tmp_path: Path) -> None:
-    result = BashTool(tmp_path).execute(
-        {"command": 'python -c "print(\'shell-ok\')"'}
-    )
+    result = BashTool(tmp_path).execute({"command": "python -c \"print('shell-ok')\""})
 
     assert "Exit code: 0" in result
     assert "shell-ok" in result
@@ -114,23 +106,70 @@ def test_bash_executes_successful_command(tmp_path: Path) -> None:
 def test_bash_reports_nonzero_exit(tmp_path: Path) -> None:
     with pytest.raises(ToolExecutionError, match="Exit code: 3"):
         BashTool(tmp_path).execute(
-            {
-                "command": (
-                    'python -c "import sys; print(\'bad\'); sys.exit(3)"'
-                )
-            }
+            {"command": ("python -c \"import sys; print('bad'); sys.exit(3)\"")}
         )
 
 
 def test_bash_reports_timeout(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    run = Mock(side_effect=subprocess.TimeoutExpired("cmd", 2))
-    monkeypatch.setattr("codehead.tools.bash.subprocess.run", run)
+    with pytest.raises(ToolExecutionError, match="timed out after 2 seconds") as caught:
+        BashTool(tmp_path, timeout_seconds=2).execute(
+            {
+                "command": "python -c \"import time; print('started', flush=True); time.sleep(5)\""
+            }
+        )
+    assert "started" in str(caught.value)
 
-    with pytest.raises(ToolExecutionError, match="timed out after 2 seconds"):
-        BashTool(tmp_path, timeout_seconds=2).execute({"command": "slow"})
+
+def test_read_limits_source_bytes_and_marks_truncation(tmp_path: Path) -> None:
+    content = "界" * 15000 + "unread tail"
+    (tmp_path / "large.txt").write_text(content, encoding="utf-8")
+
+    result = ReadTool(tmp_path).execute({"path": "large.txt"})
+
+    assert result.startswith("界" * 100)
+    assert "[output truncated]" in result
+    assert "unread tail" not in result
+    assert len(result.encode("utf-8")) < 50 * 1024
+
+
+def test_read_exact_byte_boundary_and_invalid_utf8(tmp_path: Path) -> None:
+    path = tmp_path / "boundary.txt"
+    path.write_bytes("界".encode() * (40 * 1024 // 3) + b"a")
+    result = ReadTool(tmp_path).execute({"path": "boundary.txt"})
+    assert result == path.read_text(encoding="utf-8")
+    assert "truncated" not in result
+
+    path.write_bytes(b"valid\xffinvalid")
+    with pytest.raises(ToolExecutionError, match="Failed to read"):
+        ReadTool(tmp_path).execute({"path": "boundary.txt"})
+
+
+@pytest.mark.parametrize("exit_code", [0, 3])
+def test_bash_drains_large_stdout_and_stderr_with_head_tail(
+    tmp_path: Path, exit_code: int
+) -> None:
+    command = (
+        'python -c "import sys; '
+        "sys.stdout.write('OUT_HEAD'+'x'*1000000+'OUT_TAIL'); "
+        "sys.stderr.write('ERR_HEAD'+'y'*1000000+'ERR_TAIL'); "
+        f'sys.exit({exit_code})"'
+    )
+    tool = BashTool(tmp_path, timeout_seconds=15)
+    if exit_code:
+        with pytest.raises(ToolExecutionError) as caught:
+            tool.execute({"command": command})
+        output = str(caught.value)
+    else:
+        output = tool.execute({"command": command})
+
+    assert f"Exit code: {exit_code}" in output
+    assert all(
+        text in output for text in ("OUT_HEAD", "OUT_TAIL", "ERR_HEAD", "ERR_TAIL")
+    )
+    assert output.count("[output truncated]") == 2
+    assert len(output.encode("utf-8")) < 50 * 1024
 
 
 @pytest.mark.parametrize(
@@ -143,14 +182,17 @@ def test_bash_selects_platform_shell_and_removes_api_key(
     system_name: str,
     executable: str,
 ) -> None:
-    run = Mock(
-        return_value=SimpleNamespace(returncode=0, stdout="ok\n", stderr="")
-    )
+    popen = Mock()
+    process = popen.return_value
+    process.stdout.read.side_effect = [b"ok\n", b""]
+    process.stderr.read.return_value = b""
+    process.wait.return_value = 0
+    process.poll.return_value = 0
     monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
     monkeypatch.setattr("codehead.tools.bash.platform.system", lambda: system_name)
-    monkeypatch.setattr("codehead.tools.bash.subprocess.run", run)
+    monkeypatch.setattr("codehead.tools.bash.subprocess.Popen", popen)
 
     BashTool(tmp_path).execute({"command": "echo ok"})
 
-    assert run.call_args.args[0][0] == executable
-    assert "DEEPSEEK_API_KEY" not in run.call_args.kwargs["env"]
+    assert popen.call_args.args[0][0] == executable
+    assert "DEEPSEEK_API_KEY" not in popen.call_args.kwargs["env"]

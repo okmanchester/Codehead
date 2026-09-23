@@ -5,6 +5,7 @@ from codehead.tools.bash import BashTool
 from codehead.tools.edit import EditTool
 from codehead.tools.read import ReadTool
 from codehead.tools.registry import ToolRegistry
+from codehead.tools.runtime import ToolRuntime
 from codehead.tools.write import WriteTool
 
 __all__ = [
@@ -13,5 +14,6 @@ __all__ = [
     "ReadTool",
     "Tool",
     "ToolRegistry",
+    "ToolRuntime",
     "WriteTool",
 ]

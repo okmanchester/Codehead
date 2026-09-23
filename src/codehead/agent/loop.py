@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 
 from codehead.agent.agent import Agent
-from codehead.errors import AgentAbortedError, ModelError, ToolExecutionError
+from codehead.errors import AgentAbortedError, ModelError
 from codehead.models import (
     AgentEvent,
     AssistantTextDelta,
@@ -19,12 +19,12 @@ from codehead.models import (
     SystemMessage,
     ToolCompleted,
     ToolMessage,
-    ToolResult,
     ToolStarted,
     TurnCompleted,
     UserMessage,
 )
 from codehead.session import Session
+from codehead.tools.runtime import ToolRuntime
 
 
 class AgentLoop:
@@ -35,6 +35,7 @@ class AgentLoop:
             raise ValueError("max_steps must be at least 1")
         self._agent = agent
         self._max_steps = max_steps
+        self._tool_runtime = ToolRuntime(agent.tools)
 
     async def aclose(self) -> None:
         """Close the provider after all turns have finished."""
@@ -91,16 +92,7 @@ class AgentLoop:
                 return
             for tool_call in assistant.tool_calls:
                 yield ToolStarted(step=step, tool_call=tool_call)
-                try:
-                    result = await asyncio.to_thread(
-                        self._agent.tools.execute, tool_call
-                    )
-                except ToolExecutionError as exc:
-                    result = ToolResult(
-                        tool_call_id=tool_call.id,
-                        output=str(exc),
-                        is_error=True,
-                    )
+                result = await asyncio.to_thread(self._tool_runtime.execute, tool_call)
                 session.add(
                     ToolMessage(
                         tool_call_id=result.tool_call_id,

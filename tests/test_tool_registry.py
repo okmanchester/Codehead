@@ -5,7 +5,7 @@ import pytest
 
 from codehead.errors import ToolExecutionError
 from codehead.models import JsonObject, JsonValue, ToolCall, ToolResult
-from codehead.tools import Tool, ToolRegistry
+from codehead.tools import Tool, ToolRegistry, ToolRuntime
 
 
 class EchoTool(Tool):
@@ -47,13 +47,13 @@ class MutatingTool(Tool):
         return "done"
 
 
-def test_register_get_definition_and_execute() -> None:
+def test_register_get_definition_and_runtime_execute() -> None:
     tool = EchoTool()
     registry = ToolRegistry([tool])
 
     assert registry.get("echo") is tool
     assert registry.definitions() == (tool.definition(),)
-    assert registry.execute(
+    assert ToolRuntime(registry).execute(
         ToolCall(id="call-1", name="echo", arguments={"text": "hello"})
     ) == ToolResult(tool_call_id="call-1", output="hello")
 
@@ -65,7 +65,7 @@ def test_execute_uses_a_defensive_arguments_copy() -> None:
         arguments={"values": ["original"]},
     )
 
-    ToolRegistry([MutatingTool()]).execute(call)
+    ToolRuntime(ToolRegistry([MutatingTool()])).execute(call)
 
     assert call.arguments == {"values": ["original"]}
 
@@ -79,8 +79,10 @@ def test_duplicate_and_unknown_tools_are_rejected() -> None:
         registry.get("missing")
 
 
-def test_unexpected_tool_error_is_wrapped() -> None:
+def test_unexpected_tool_error_becomes_a_result() -> None:
     registry = ToolRegistry([BrokenTool()])
 
-    with pytest.raises(ToolExecutionError, match="broken.*boom"):
-        registry.execute(ToolCall(id="call-1", name="broken"))
+    result = ToolRuntime(registry).execute(ToolCall(id="call-1", name="broken"))
+
+    assert result.is_error
+    assert "broken" in result.output and "boom" in result.output
