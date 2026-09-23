@@ -1,9 +1,24 @@
+import asyncio
 from io import StringIO
+from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
 from rich.console import Console
 
-from codehead.cli import run_repl
+from codehead.cli import _main, main, run_repl
 from codehead.errors import ModelError
+from codehead.models import (
+    AssistantMessage,
+    AssistantTextDelta,
+    FinishReason,
+    LLMResponse,
+    ModelCompleted,
+    ToolCall,
+    ToolCompleted,
+    ToolResult,
+    ToolStarted,
+    TurnCompleted,
+)
 from codehead.session import Session
 
 
@@ -11,14 +26,24 @@ class FakeLoop:
     def __init__(self) -> None:
         self.calls: list[tuple[Session, str]] = []
 
-    def run(self, session: Session, user_input: str) -> str:
+    async def stream(self, session: Session, user_input: str):
         self.calls.append((session, user_input))
-        return f"answer: {user_input}"
+        answer = f"answer: {user_input}"
+        yield AssistantTextDelta(step=1, delta=answer)
+        yield ModelCompleted(
+            step=1,
+            response=LLMResponse(
+                message=AssistantMessage(content=answer),
+                finish_reason=FinishReason.END_TURN,
+            ),
+        )
+        yield TurnCompleted(step=1, answer=answer)
 
 
 class FailingLoop:
-    def run(self, session: Session, user_input: str) -> str:
+    async def stream(self, session: Session, user_input: str):
         raise ModelError("unavailable")
+        yield
 
 
 def test_repl_keeps_one_session_and_handles_exit() -> None:
@@ -27,27 +52,31 @@ def test_repl_keeps_one_session_and_handles_exit() -> None:
     inputs = iter(["", "first", "second", "quit"])
     loop = FakeLoop()
 
-    exit_code = run_repl(
-        loop,  # type: ignore[arg-type]
-        console=console,
-        read_input=lambda prompt: next(inputs),
+    exit_code = asyncio.run(
+        run_repl(
+            loop,  # type: ignore[arg-type]
+            console=console,
+            read_input=lambda prompt: next(inputs),
+        )
     )
 
     assert exit_code == 0
     assert [user_input for _, user_input in loop.calls] == ["first", "second"]
     assert loop.calls[0][0] is loop.calls[1][0]
-    assert "answer: first" in output.getvalue()
-    assert "answer: second" in output.getvalue()
+    assert output.getvalue().count("answer: first") == 1
+    assert output.getvalue().count("answer: second") == 1
 
 
 def test_repl_returns_nonzero_for_model_error() -> None:
     output = StringIO()
     console = Console(file=output, force_terminal=False, color_system=None)
 
-    exit_code = run_repl(
-        FailingLoop(),  # type: ignore[arg-type]
-        console=console,
-        read_input=lambda prompt: "hello",
+    exit_code = asyncio.run(
+        run_repl(
+            FailingLoop(),  # type: ignore[arg-type]
+            console=console,
+            read_input=lambda prompt: "hello",
+        )
     )
 
     assert exit_code == 1
@@ -61,8 +90,116 @@ def test_repl_treats_eof_as_normal_exit() -> None:
     def end_input(prompt: str) -> str:
         raise EOFError
 
-    assert run_repl(
-        FakeLoop(),  # type: ignore[arg-type]
-        console=console,
-        read_input=end_input,
-    ) == 0
+    assert (
+        asyncio.run(
+            run_repl(
+                FakeLoop(),  # type: ignore[arg-type]
+                console=console,
+                read_input=end_input,
+            )
+        )
+        == 0
+    )
+
+
+def test_repl_renders_deltas_immediately_and_tool_status_without_output() -> None:
+    output = StringIO()
+
+    class StreamingLoop(FakeLoop):
+        async def stream(self, session, user_input):
+            yield AssistantTextDelta(step=1, delta="[literal]")
+            assert output.getvalue().endswith("Codehead> [literal]")
+            yield AssistantTextDelta(step=1, delta=" text")
+            yield ModelCompleted(
+                step=1,
+                response=LLMResponse(
+                    message=AssistantMessage(content="[literal] text"),
+                    finish_reason=FinishReason.TOOL_CALLS,
+                ),
+            )
+            for call_id, is_error in (("one", False), ("two", True)):
+                yield ToolStarted(step=1, tool_call=ToolCall(id=call_id, name="read"))
+                yield ToolCompleted(
+                    step=1,
+                    result=ToolResult(
+                        tool_call_id=call_id,
+                        output="private tool output",
+                        is_error=is_error,
+                    ),
+                )
+            async for event in super().stream(session, user_input):
+                yield event
+
+    inputs = iter(["hello", "exit"])
+    assert (
+        asyncio.run(
+            run_repl(
+                StreamingLoop(),
+                console=Console(file=output, force_terminal=False),
+                read_input=lambda _: next(inputs),
+            )
+        )
+        == 0
+    )
+    rendered = output.getvalue()
+    assert rendered.count("[literal] text") == 1
+    assert rendered.count("answer: hello") == 1
+    assert "read: started" in rendered
+    assert "read: succeeded" in rendered
+    assert "read: failed" in rendered
+    assert "private tool output" not in rendered
+
+
+@pytest.mark.parametrize(
+    "failure", [ModelError("broken"), asyncio.CancelledError(), KeyboardInterrupt()]
+)
+def test_partial_output_failure_closes_generator(failure) -> None:
+    output = StringIO()
+
+    class InterruptedLoop:
+        closed = False
+
+        async def stream(self, session, user_input):
+            try:
+                yield AssistantTextDelta(step=1, delta="partial")
+                raise failure
+            finally:
+                self.closed = True
+
+    loop = InterruptedLoop()
+    coroutine = run_repl(
+        loop, console=Console(file=output), read_input=lambda _: "hello"
+    )
+    if isinstance(failure, asyncio.CancelledError):
+        with pytest.raises(asyncio.CancelledError):
+            asyncio.run(coroutine)
+    else:
+        assert asyncio.run(coroutine) == (1 if isinstance(failure, ModelError) else 0)
+    assert loop.closed
+    assert "partial\n" in output.getvalue()
+    if isinstance(failure, ModelError):
+        assert "partial\nError: broken" in output.getvalue()
+
+
+@pytest.mark.parametrize(
+    "failure", [None, ModelError("broken"), asyncio.CancelledError()]
+)
+def test_main_closes_loop_on_exit_and_failure(failure) -> None:
+    loop = Mock(aclose=AsyncMock())
+    repl = AsyncMock(return_value=0, side_effect=failure)
+    with (
+        patch("codehead.cli.Config.from_env"),
+        patch("codehead.cli.build_agent_loop", return_value=loop),
+        patch("codehead.cli.run_repl", repl),
+    ):
+        if failure is None:
+            assert asyncio.run(_main()) == 0
+        else:
+            with pytest.raises(type(failure)):
+                asyncio.run(_main())
+    loop.aclose.assert_awaited_once()
+
+
+def test_main_treats_keyboard_interrupt_as_normal_exit() -> None:
+    with patch("codehead.cli._main", side_effect=KeyboardInterrupt):
+        assert main() == 0

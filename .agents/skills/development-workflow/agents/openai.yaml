@@ -1,4 +1,0 @@
-interface:
-  display_name: "Development Workflow"
-  short_description: "保护已有改动，以最小范围实现，并用真实验证证据交付"
-  default_prompt: "Use $development-workflow for non-trivial repository changes: preserve pre-existing user work, inspect only the context needed, plan only when risk or ambiguity warrants it, make the smallest sufficient change, validate through the repository's real checks, inspect the final diff, and report only evidence actually observed."

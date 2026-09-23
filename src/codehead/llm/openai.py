@@ -1,9 +1,11 @@
 """OpenAI-compatible Chat Completions provider."""
 
 import json
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Any
 
-from openai import OpenAI, OpenAIError
+from openai import AsyncOpenAI, OpenAIError
 from pydantic import ValidationError
 
 from codehead.errors import ModelError
@@ -13,6 +15,9 @@ from codehead.models import (
     FinishReason,
     LLMRequest,
     LLMResponse,
+    LLMResponseCompleted,
+    LLMStreamEvent,
+    LLMTextDelta,
     Message,
     SystemMessage,
     TokenUsage,
@@ -24,7 +29,7 @@ from codehead.models import (
 
 
 class OpenAIProvider(LLMProvider):
-    """Synchronous adapter for the OpenAI Chat Completions protocol."""
+    """Asynchronous streaming adapter for the OpenAI Chat Completions protocol."""
 
     def __init__(
         self,
@@ -33,45 +38,95 @@ class OpenAIProvider(LLMProvider):
         base_url: str | None = None,
         *,
         disable_thinking: bool = True,
-        client: OpenAI | None = None,
+        client: AsyncOpenAI | None = None,
     ) -> None:
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
         self.disable_thinking = disable_thinking
-        self._client = client or OpenAI(
+        self._owns_client = client is None
+        self._client = client or AsyncOpenAI(
             api_key=api_key,
             base_url=base_url,
             max_retries=0,
         )
 
-    def complete(self, request: LLMRequest) -> LLMResponse:
+    async def aclose(self) -> None:
+        """Close an owned client; injected clients remain the caller's responsibility."""
+        if self._owns_client:
+            await self._client.close()
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[LLMStreamEvent]:
         payload: dict[str, Any] = {
             "model": self.model,
-            "messages": [
-                _message_payload(message) for message in request.messages
-            ],
-            "stream": False,
+            "messages": [_message_payload(message) for message in request.messages],
+            "stream": True,
+            "stream_options": {"include_usage": True},
         }
         if request.tools:
             payload["tools"] = [
-                _tool_definition_payload(definition)
-                for definition in request.tools
+                _tool_definition_payload(definition) for definition in request.tools
             ]
         if self.disable_thinking:
             payload["extra_body"] = {"thinking": {"type": "disabled"}}
 
+        text_parts: list[str] = []
+        calls: dict[int, _ToolCallBuffer] = {}
+        finish_reason = None
+        usage = None
+        saw_choice = False
         try:
-            response = self._client.chat.completions.create(**payload)
+            stream = await self._client.chat.completions.create(**payload)
+            async with stream:
+                async for chunk in stream:
+                    if chunk.usage is not None:
+                        usage = _parse_usage(chunk.usage)
+                    if not chunk.choices:
+                        continue
+                    choice = chunk.choices[0]
+                    saw_choice = True
+                    if finish_reason is not None:
+                        raise ModelError(
+                            "Model returned content after its finish reason"
+                        )
+                    delta = choice.delta
+                    if delta.content is not None:
+                        if not isinstance(delta.content, str):
+                            raise ModelError("Model returned an invalid response")
+                        text_parts.append(delta.content)
+                        if delta.content:
+                            yield LLMTextDelta(delta=delta.content)
+                    for fragment in delta.tool_calls or ():
+                        index = fragment.index
+                        if not isinstance(index, int) or index < 0:
+                            raise ModelError(
+                                "Model returned an invalid tool call index"
+                            )
+                        if fragment.type not in (None, "function"):
+                            raise ModelError("Model returned an unsupported tool call")
+                        call = calls.setdefault(index, _ToolCallBuffer())
+                        call.id += fragment.id or ""
+                        if fragment.function is not None:
+                            call.name += fragment.function.name or ""
+                            call.arguments += fragment.function.arguments or ""
+                    finish_reason = choice.finish_reason
+            if not saw_choice:
+                raise ModelError("Model stream did not contain any choices")
+            response = LLMResponse(
+                message=AssistantMessage(
+                    content="".join(text_parts) if text_parts else None,
+                    tool_calls=tuple(calls[index].parse() for index in sorted(calls)),
+                ),
+                finish_reason=_finish_reason(finish_reason),
+                usage=usage,
+            )
         except OpenAIError as exc:
             raise ModelError(f"Model request failed: {exc}") from exc
-
-        try:
-            return _parse_response(response)
         except ModelError:
             raise
         except (AttributeError, TypeError, ValueError, ValidationError) as exc:
             raise ModelError("Model returned an invalid response") from exc
+        yield LLMResponseCompleted(response=response)
 
 
 def _message_payload(message: Message) -> dict[str, Any]:
@@ -123,42 +178,23 @@ def _tool_definition_payload(definition: ToolDefinition) -> dict[str, Any]:
     }
 
 
-def _parse_response(response: Any) -> LLMResponse:
-    if not response.choices:
-        raise ModelError("Model response did not contain any choices")
+@dataclass
+class _ToolCallBuffer:
+    id: str = ""
+    name: str = ""
+    arguments: str = ""
 
-    choice = response.choices[0]
-    response_message = choice.message
-    tool_calls = tuple(
-        _parse_tool_call(tool_call)
-        for tool_call in (response_message.tool_calls or ())
-    )
-    return LLMResponse(
-        message=AssistantMessage(
-            content=response_message.content,
-            tool_calls=tool_calls,
-        ),
-        finish_reason=_finish_reason(getattr(choice, "finish_reason", None)),
-        usage=_parse_usage(getattr(response, "usage", None)),
-    )
-
-
-def _parse_tool_call(tool_call: Any) -> ToolCall:
-    try:
-        name = tool_call.function.name
-        raw_arguments = tool_call.function.arguments
-        arguments = json.loads(raw_arguments)
-        call_id = tool_call.id
-    except (AttributeError, json.JSONDecodeError, TypeError) as exc:
-        raise ModelError("Model returned an invalid function tool call") from exc
-
-    if not isinstance(arguments, dict):
-        raise ModelError("Tool call arguments must be a JSON object")
-
-    try:
-        return ToolCall(id=call_id, name=name, arguments=arguments)
-    except ValidationError as exc:
-        raise ModelError("Model returned an invalid function tool call") from exc
+    def parse(self) -> ToolCall:
+        try:
+            arguments = json.loads(self.arguments)
+        except (json.JSONDecodeError, TypeError) as exc:
+            raise ModelError("Model returned an invalid function tool call") from exc
+        if not isinstance(arguments, dict):
+            raise ModelError("Tool call arguments must be a JSON object")
+        try:
+            return ToolCall(id=self.id, name=self.name, arguments=arguments)
+        except ValidationError as exc:
+            raise ModelError("Model returned an invalid function tool call") from exc
 
 
 def _parse_usage(usage: Any) -> TokenUsage | None:

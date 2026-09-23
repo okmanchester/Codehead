@@ -72,3 +72,34 @@ Codehead 默认使用 `deepseek-flash` 和 `https://api.deepseek.com`。可通�
 当前 `read`、`write` 和 `edit` 工具只能访问 workspace 内的文件。`bash` 工具
 以 workspace 为工作目录，但不提供进程沙箱；Windows 使用 PowerShell，Unix
 使用 Bash。
+
+## 流式事件
+
+Provider 和 AgentLoop 使用异步流，事件类型统一从 `codehead.models` 导入。
+Provider 输出 `LLMTextDelta`，最后输出一次 `LLMResponseCompleted`；Loop 输出
+`ModelStarted`、`AssistantTextDelta`、`ModelCompleted`、`ToolStarted`、
+`ToolCompleted` 和最终的 `TurnCompleted`。`step` 从 1 开始，表示本回合第几次模型调用。
+
+文本增量仅用于即时展示。Loop 校验完整响应的 FinishReason 后才保存 assistant
+消息、发送 `ModelCompleted` 和执行工具；工具结果保存后才发送 `ToolCompleted`。
+CLI 不重复打印完成事件中的文本，也不默认展开工具输出。模型失败和步数耗尽仍通过
+异常报告；工具业务失败通过 `ToolResult.is_error` 回传模型。
+
+`complete(request)` 和 `run(session, user_input)` 现在必须 `await`，内部消费同一条
+流式路径。直接消费事件时，使用 `contextlib.aclosing` 保证提前退出也能关闭流：
+
+```python
+from contextlib import aclosing
+
+async def consume_turn(loop, session, user_input):
+    async with aclosing(loop.stream(session, user_input)) as events:
+        async for event in events:
+            print(event)
+```
+
+所有回合结束后，调用方须在 `finally` 中 `await loop.aclose()`（直接使用 Provider
+则调用 `provider.aclose()`）。CLI 已负责这一清理。外部注入的 SDK 客户端由注入方关闭。
+
+一个 Session 同时仅支持一个回合。同步工具在线程中按顺序执行；中断不能强制停止
+已经启动的工具，也不能撤销其副作用，退出时可能需要等待该工具结束。首版中断后
+退出 CLI，不支持恢复中断的 Session。事件未持久化，不支持重放。

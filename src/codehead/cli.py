@@ -1,6 +1,8 @@
 """Command-line entry point for Codehead."""
 
+import asyncio
 from collections.abc import Callable
+from contextlib import aclosing
 
 from rich.console import Console
 from rich.text import Text
@@ -9,6 +11,12 @@ from codehead.agent import Agent, AgentLoop
 from codehead.config import Config
 from codehead.errors import CodeheadError
 from codehead.llm import OpenAIProvider
+from codehead.models import (
+    AssistantTextDelta,
+    ModelCompleted,
+    ToolCompleted,
+    ToolStarted,
+)
 from codehead.prompt import build_system_prompt
 from codehead.session import Session
 from codehead.tools import BashTool, EditTool, ReadTool, ToolRegistry, WriteTool
@@ -38,7 +46,7 @@ def build_agent_loop(config: Config) -> AgentLoop:
     return AgentLoop(agent)
 
 
-def run_repl(
+async def run_repl(
     loop: AgentLoop,
     *,
     console: Console,
@@ -61,19 +69,41 @@ def run_repl(
         if user_input.lower() in {"exit", "quit"}:
             return 0
 
+        line_open = False
+        tool_names: dict[str, str] = {}
         try:
-            answer = loop.run(session, user_input)
+            async with aclosing(loop.stream(session, user_input)) as events:
+                async for event in events:
+                    if isinstance(event, AssistantTextDelta):
+                        if not line_open:
+                            console.print(Text("Codehead> ", style="bold cyan"), end="")
+                            line_open = True
+                        console.print(Text(event.delta), end="", soft_wrap=True)
+                    elif isinstance(event, ModelCompleted):
+                        if line_open:
+                            console.print()
+                            line_open = False
+                    elif isinstance(event, ToolStarted):
+                        tool_names[event.tool_call.id] = event.tool_call.name
+                        console.print(Text(f"Tool> {event.tool_call.name}: started"))
+                    elif isinstance(event, ToolCompleted):
+                        name = tool_names.pop(event.result.tool_call_id)
+                        status = "failed" if event.result.is_error else "succeeded"
+                        console.print(Text(f"Tool> {name}: {status}"))
         except KeyboardInterrupt:
             console.print()
             return 0
+        except asyncio.CancelledError:
+            console.print()
+            raise
         except CodeheadError as exc:
+            if line_open:
+                console.print()
             console.print(Text(f"Error: {exc}", style="bold red"))
             return 1
 
-        console.print(Text.assemble(("Codehead> ", "bold cyan"), answer))
 
-
-def main() -> int:
+async def _main() -> int:
     """Load configuration and start the interactive CLI."""
     console = Console()
     try:
@@ -82,7 +112,18 @@ def main() -> int:
     except (CodeheadError, ValueError) as exc:
         console.print(Text(f"Error: {exc}", style="bold red"))
         return 1
-    return run_repl(loop, console=console)
+    try:
+        return await run_repl(loop, console=console)
+    finally:
+        await loop.aclose()
+
+
+def main() -> int:
+    """Own one event loop for the entire CLI session."""
+    try:
+        return asyncio.run(_main())
+    except KeyboardInterrupt:
+        return 0
 
 
 if __name__ == "__main__":
