@@ -7,10 +7,12 @@ from rich.console import Console
 
 from codehead.cli import _main, build_agent_loop, main, run_repl
 from codehead.config import Config
-from codehead.errors import ModelError
+from codehead.errors import ContextError, ModelError, StorageError
 from codehead.models import (
     AssistantMessage,
     AssistantTextDelta,
+    ContextCompacted,
+    ContextCompactionStarted,
     FinishReason,
     LLMResponse,
     ModelCompleted,
@@ -21,7 +23,7 @@ from codehead.models import (
     TurnCompleted,
     UserMessage,
 )
-from codehead.session import Session
+from codehead.session import Session, SQLiteSessionStore
 
 
 class FakeLoop:
@@ -227,12 +229,17 @@ def test_partial_output_failure_closes_generator(failure) -> None:
 @pytest.mark.parametrize(
     "failure", [None, ModelError("broken"), asyncio.CancelledError()]
 )
-def test_main_closes_loop_on_exit_and_failure(failure) -> None:
+def test_main_closes_loop_on_exit_and_failure(failure, tmp_path) -> None:
     loop = Mock(aclose=AsyncMock())
     repl = AsyncMock(return_value=0, side_effect=failure)
+    store = SQLiteSessionStore(tmp_path / "archive.sqlite3")
     with (
-        patch("codehead.cli.Config.from_env"),
+        patch(
+            "codehead.cli.Config.from_env",
+            return_value=Config(api_key="test", workspace=tmp_path),
+        ),
         patch("codehead.cli.build_agent_loop", return_value=loop),
+        patch("codehead.cli.SQLiteSessionStore", return_value=store),
         patch("codehead.cli.run_repl", repl),
     ):
         if failure is None:
@@ -241,6 +248,7 @@ def test_main_closes_loop_on_exit_and_failure(failure) -> None:
             with pytest.raises(type(failure)):
                 asyncio.run(_main())
     loop.aclose.assert_awaited_once()
+    assert store._connection is None
 
 
 def test_main_treats_keyboard_interrupt_as_normal_exit() -> None:
@@ -258,3 +266,67 @@ def test_startup_requires_ripgrep(tmp_path) -> None:
         pytest.raises(ValueError, match="ripgrep"),
     ):
         build_agent_loop(config)
+
+
+@pytest.mark.parametrize("fatal", [False, True])
+def test_context_error_continues_but_storage_error_stops_repl(fatal):
+    output = StringIO()
+
+    class ErrorLoop(FakeLoop):
+        async def stream(self, session, user_input):
+            if user_input == "first":
+                if fatal:
+                    raise StorageError("archive failed")
+                raise ContextError("summary failed")
+            async for event in super().stream(session, user_input):
+                yield event
+
+    loop = ErrorLoop()
+    inputs = iter(["first", "second", "quit"])
+    result = asyncio.run(
+        run_repl(loop, console=Console(file=output), read_input=lambda _: next(inputs))
+    )
+    assert result == int(fatal)
+    assert len(loop.calls) == (0 if fatal else 1)
+    assert ("archive failed" if fatal else "summary failed") in output.getvalue()
+
+
+def test_repl_displays_context_status_and_estimates():
+    output = StringIO()
+
+    class CompactingLoop(FakeLoop):
+        async def stream(self, session, user_input):
+            yield ContextCompactionStarted(step=1, before_tokens=3000)
+            yield ContextCompacted(step=1, before_tokens=3000, after_tokens=1000)
+            async for event in super().stream(session, user_input):
+                yield event
+
+    inputs = iter(["hello", "quit"])
+    assert (
+        asyncio.run(
+            run_repl(
+                CompactingLoop(),
+                console=Console(file=output, width=120),
+                read_input=lambda _: next(inputs),
+            )
+        )
+        == 0
+    )
+    assert "Context> compacting (~3000 input tokens)" in output.getvalue()
+    assert "Context> compacted: ~3000 -> ~1000 input tokens" in output.getvalue()
+
+
+def test_database_startup_error_closes_provider(tmp_path):
+    loop = Mock(aclose=AsyncMock())
+    with (
+        patch(
+            "codehead.cli.Config.from_env",
+            return_value=Config(api_key="test", workspace=tmp_path),
+        ),
+        patch("codehead.cli.build_agent_loop", return_value=loop),
+        patch(
+            "codehead.cli.SQLiteSessionStore", side_effect=StorageError("cannot open")
+        ),
+    ):
+        assert asyncio.run(_main()) == 1
+    loop.aclose.assert_awaited_once()

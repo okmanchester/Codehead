@@ -9,16 +9,18 @@ from rich.text import Text
 
 from codehead.agent import Agent, AgentLoop
 from codehead.config import Config
-from codehead.errors import CodeheadError
+from codehead.errors import CodeheadError, StorageError
 from codehead.llm import OpenAIProvider
 from codehead.models import (
     AssistantTextDelta,
+    ContextCompacted,
+    ContextCompactionStarted,
     ModelCompleted,
     ToolCompleted,
     ToolStarted,
 )
 from codehead.prompt import build_system_prompt
-from codehead.session import Session
+from codehead.session import Session, SQLiteSessionStore
 from codehead.tools import (
     BashTool,
     EditTool,
@@ -55,7 +57,7 @@ def build_agent_loop(config: Config) -> AgentLoop:
         tools=tools,
         system_prompt=build_system_prompt(config.workspace),
     )
-    return AgentLoop(agent)
+    return AgentLoop(agent, context_budget=config.context_budget)
 
 
 async def run_repl(
@@ -63,9 +65,23 @@ async def run_repl(
     *,
     console: Console,
     read_input: Callable[[str], str] | None = None,
+    session: Session | None = None,
 ) -> int:
-    """Run an in-memory interactive session."""
-    session = Session()
+    """Run a session; production callers inject a disk-backed session."""
+    active_session = session if session is not None else Session()
+    try:
+        return await _run_repl(loop, active_session, console, read_input)
+    finally:
+        if session is None:
+            active_session.close()
+
+
+async def _run_repl(
+    loop: AgentLoop,
+    session: Session,
+    console: Console,
+    read_input: Callable[[str], str] | None,
+) -> int:
     reader = read_input or console.input
     console.print("Codehead is ready. Type 'exit' or 'quit' to leave.")
 
@@ -95,6 +111,18 @@ async def run_repl(
                         if line_open:
                             console.print()
                             line_open = False
+                    elif isinstance(event, ContextCompactionStarted):
+                        console.print(
+                            Text(
+                                f"Context> compacting (~{event.before_tokens} input tokens)"
+                            )
+                        )
+                    elif isinstance(event, ContextCompacted):
+                        console.print(
+                            Text(
+                                f"Context> compacted: ~{event.before_tokens} -> ~{event.after_tokens} input tokens"
+                            )
+                        )
                     elif isinstance(event, ToolStarted):
                         tool_names[event.tool_call.id] = event.tool_call.name
                         console.print(Text(f"Tool> {event.tool_call.name}: started"))
@@ -108,6 +136,11 @@ async def run_repl(
         except asyncio.CancelledError:
             console.print()
             raise
+        except StorageError as exc:
+            if line_open:
+                console.print()
+            console.print(Text(f"Error: {exc}; session stopped", style="bold red"))
+            return 1
         except CodeheadError as exc:
             if line_open:
                 console.print()
@@ -125,7 +158,17 @@ async def _main() -> int:
         console.print(Text(f"Error: {exc}", style="bold red"))
         return 1
     try:
-        return await run_repl(loop, console=console)
+        store = SQLiteSessionStore(config.session_db_path)
+        try:
+            session = Session(
+                store=store, workspace=str(config.workspace), model=config.model
+            )
+            return await run_repl(loop, console=console, session=session)
+        finally:
+            store.close()
+    except StorageError as exc:
+        console.print(Text(f"Error: {exc}", style="bold red"))
+        return 1
     finally:
         await loop.aclose()
 

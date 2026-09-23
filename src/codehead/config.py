@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Self
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Config(BaseModel):
@@ -17,6 +17,15 @@ class Config(BaseModel):
     api_key: str
     base_url: str = "https://api.deepseek.com"
     workspace: Path
+    session_db: Path | None = None
+    context_budget: int = Field(default=32768, ge=1024)
+
+    @property
+    def session_db_path(self) -> Path:
+        path = (self.session_db or Path(".codehead/sessions.sqlite3")).expanduser()
+        if not path.is_absolute():
+            path = self.workspace / path
+        return path.resolve()
 
     @classmethod
     def from_env(cls) -> Self:
@@ -38,9 +47,10 @@ class Config(BaseModel):
         return cls(
             model=_optional_env("CODEHEAD_MODEL") or "deepseek-flash",
             api_key=api_key,
-            base_url=_optional_env("DEEPSEEK_BASE_URL")
-            or "https://api.deepseek.com",
+            base_url=_optional_env("DEEPSEEK_BASE_URL") or "https://api.deepseek.com",
             workspace=resolved_workspace,
+            session_db=_optional_env("CODEHEAD_SESSION_DB"),
+            context_budget=_optional_env("CODEHEAD_CONTEXT_BUDGET") or 32768,
         )
 
 

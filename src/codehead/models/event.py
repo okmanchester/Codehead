@@ -29,6 +29,19 @@ class ModelStarted(CodeheadModel):
     step: int = Field(ge=1)
 
 
+class ContextCompactionStarted(CodeheadModel):
+    type: Literal["context.compaction_started"] = "context.compaction_started"
+    step: int = Field(ge=1)
+    before_tokens: int = Field(ge=0)
+
+
+class ContextCompacted(CodeheadModel):
+    type: Literal["context.compacted"] = "context.compacted"
+    step: int = Field(ge=1)
+    before_tokens: int = Field(ge=0)
+    after_tokens: int = Field(ge=0)
+
+
 class AssistantTextDelta(CodeheadModel):
     type: Literal["assistant.text_delta"] = "assistant.text_delta"
     step: int = Field(ge=1)
@@ -61,6 +74,8 @@ class TurnCompleted(CodeheadModel):
 
 AgentEvent = Annotated[
     ModelStarted
+    | ContextCompactionStarted
+    | ContextCompacted
     | AssistantTextDelta
     | ModelCompleted
     | ToolStarted

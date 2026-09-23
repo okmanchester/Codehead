@@ -3,6 +3,8 @@
 from codehead.models.event import (
     AgentEvent,
     AssistantTextDelta,
+    ContextCompacted,
+    ContextCompactionStarted,
     LLMResponseCompleted,
     LLMStreamEvent,
     LLMTextDelta,
@@ -38,6 +40,8 @@ __all__ = [
     "AgentEvent",
     "AssistantMessage",
     "AssistantTextDelta",
+    "ContextCompacted",
+    "ContextCompactionStarted",
     "FinishReason",
     "JsonObject",
     "JsonScalar",

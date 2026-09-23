@@ -15,3 +15,11 @@ class ToolExecutionError(CodeheadError):
 
 class AgentAbortedError(CodeheadError):
     """Raised when the agent loop stops before producing a final answer."""
+
+
+class ContextError(CodeheadError):
+    """Raised when context cannot be safely compacted within its budget."""
+
+
+class StorageError(CodeheadError):
+    """Fatal session archive failure; the session must not be continued."""

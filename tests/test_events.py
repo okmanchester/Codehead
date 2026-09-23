@@ -4,6 +4,8 @@ from pydantic import TypeAdapter, ValidationError
 from codehead.models import (
     AgentEvent,
     AssistantTextDelta,
+    ContextCompacted,
+    ContextCompactionStarted,
     LLMResponseCompleted,
     LLMStreamEvent,
     LLMTextDelta,
@@ -45,3 +47,15 @@ def test_events_reject_empty_deltas_invalid_steps_and_mutation() -> None:
     event = AssistantTextDelta(step=1, delta="hi")
     with pytest.raises(ValidationError, match="frozen_instance"):
         event.delta = "changed"
+
+
+def test_context_events_parse_as_agent_events_only():
+    agent = TypeAdapter(AgentEvent)
+    provider = TypeAdapter(LLMStreamEvent)
+    for event in (
+        ContextCompactionStarted(step=1, before_tokens=4000),
+        ContextCompacted(step=1, before_tokens=4000, after_tokens=1000),
+    ):
+        assert agent.validate_python(event.model_dump()) == event
+        with pytest.raises(ValidationError):
+            provider.validate_python(event.model_dump())

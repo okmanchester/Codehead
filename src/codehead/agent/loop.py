@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import aclosing
 
 from codehead.agent.agent import Agent
+from codehead.agent.context import ContextManager, observe_usage
 from codehead.errors import AgentAbortedError, ModelError
 from codehead.models import (
     AgentEvent,
@@ -30,12 +31,15 @@ from codehead.tools.runtime import ToolRuntime
 class AgentLoop:
     """Drive model responses and tool results until a final answer exists."""
 
-    def __init__(self, agent: Agent, max_steps: int = 20) -> None:
+    def __init__(
+        self, agent: Agent, max_steps: int = 20, *, context_budget: int = 32768
+    ) -> None:
         if max_steps < 1:
             raise ValueError("max_steps must be at least 1")
         self._agent = agent
         self._max_steps = max_steps
         self._tool_runtime = ToolRuntime(agent.tools)
+        self._context = ContextManager(agent.provider, context_budget)
 
     async def aclose(self) -> None:
         """Close the provider after all turns have finished."""
@@ -65,11 +69,15 @@ class AgentLoop:
         session.add(UserMessage(content=user_input))
 
         for step in range(1, self._max_steps + 1):
+            tools = self._agent.tools.definitions()
+            async with aclosing(self._context.prepare(session, tools, step)) as events:
+                async for event in events:
+                    yield event
             yield ModelStarted(step=step)
             response = None
             request = LLMRequest(
                 messages=session.messages,
-                tools=self._agent.tools.definitions(),
+                tools=tools,
             )
             async with aclosing(self._agent.provider.stream(request)) as events:
                 async for event in events:
@@ -86,6 +94,7 @@ class AgentLoop:
             _validate_response(response)
             assistant = response.message
             session.add(assistant)
+            observe_usage(session, request, response.usage)
             yield ModelCompleted(step=step, response=response)
             if response.finish_reason == FinishReason.END_TURN:
                 yield TurnCompleted(step=step, answer=assistant.content)
