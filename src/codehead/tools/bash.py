@@ -11,7 +11,7 @@ from typing import BinaryIO, ClassVar
 
 from codehead.errors import ToolExecutionError
 from codehead.models import JsonObject, JsonValue
-from codehead.tools.base import Tool, require_string_argument
+from codehead.tools.base import Tool, require_string_argument, resolve_workspace_path
 from codehead.tools.output import TRUNCATION_MARKER
 
 BASH_STREAM_MAX_BYTES = 20 * 1024
@@ -20,12 +20,19 @@ BASH_STREAM_MAX_BYTES = 20 * 1024
 class BashTool(Tool):
     name = "bash"
     description = (
-        "Run a shell command from the workspace "
-        "(PowerShell on Windows, Bash on Unix). Large stdout/stderr are truncated."
+        "Run a shell command (PowerShell on Windows, Bash on Unix). "
+        "Optional workdir selects a workspace directory for this call only; "
+        "default is the workspace root. Large stdout/stderr are truncated."
     )
     parameters: ClassVar[JsonObject] = {
         "type": "object",
-        "properties": {"command": {"type": "string"}},
+        "properties": {
+            "command": {"type": "string"},
+            "workdir": {
+                "type": "string",
+                "description": "Working directory inside the workspace for this command only.",
+            },
+        },
         "required": ["command"],
         "additionalProperties": False,
     }
@@ -38,6 +45,20 @@ class BashTool(Tool):
 
     def execute(self, arguments: Mapping[str, JsonValue]) -> str:
         command = require_string_argument(arguments, "command")
+        workdir_value = arguments.get("workdir", ".")
+        if not isinstance(workdir_value, str) or not workdir_value:
+            raise ToolExecutionError(
+                "Tool argument 'workdir' must be a non-empty string"
+            )
+        workdir = resolve_workspace_path(self.workspace, workdir_value)
+        if not workdir.exists():
+            raise ToolExecutionError(
+                f"Working directory does not exist: '{workdir_value}'"
+            )
+        if not workdir.is_dir():
+            raise ToolExecutionError(
+                f"Working directory is not a directory: '{workdir_value}'"
+            )
         environment = os.environ.copy()
         environment.pop("DEEPSEEK_API_KEY", None)
 
@@ -49,7 +70,7 @@ class BashTool(Tool):
             )
             process = subprocess.Popen(
                 _shell_command(command),
-                cwd=self.workspace,
+                cwd=workdir,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 env=environment,

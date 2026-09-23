@@ -33,6 +33,8 @@ def test_tool_definition(
     assert definition.parameters["type"] == "object"
     assert definition.parameters["required"] == required
     assert definition.parameters["additionalProperties"] is False
+    if name == "bash":
+        assert definition.parameters["properties"]["workdir"]["type"] == "string"
 
 
 def test_write_read_and_edit_round_trip(tmp_path: Path) -> None:
@@ -96,11 +98,164 @@ def test_edit_requires_one_unique_match(tmp_path: Path) -> None:
         tool.execute({"path": "example.txt", "old_text": "missing", "new_text": "new"})
 
 
+def test_edit_reports_bounded_candidate_positions_without_writing(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "example.txt"
+    original = "header\nsame and same\n" + "same\n" * 5
+    path.write_text(original, encoding="utf-8")
+
+    with pytest.raises(ToolExecutionError, match="7 times") as caught:
+        EditTool(tmp_path).execute(
+            {"path": "example.txt", "old_text": "same", "new_text": "changed"}
+        )
+
+    output = str(caught.value)
+    assert "2:1:" in output
+    assert "2:10:" in output
+    assert "3:1:" in output
+    assert output.count("  2:") + output.count("  3:") <= 5
+    assert "and 2 more matches" in output
+    assert path.read_text(encoding="utf-8") == original
+
+
+def test_edit_multiline_match_reports_start_line_and_column(tmp_path: Path) -> None:
+    path = tmp_path / "example.txt"
+    original = "前缀 foo\nbar\nother foo\nbar\n"
+    path.write_text(original, encoding="utf-8")
+
+    with pytest.raises(ToolExecutionError, match="2 times") as caught:
+        EditTool(tmp_path).execute(
+            {"path": "example.txt", "old_text": "foo\nbar", "new_text": "done"}
+        )
+
+    output = str(caught.value)
+    assert "1:4:" in output
+    assert "3:7:" in output
+    assert path.read_text(encoding="utf-8") == original
+
+
+def test_edit_candidate_context_stays_short_on_long_lines(tmp_path: Path) -> None:
+    (tmp_path / "long.txt").write_text(
+        "x" * 1000 + "target" + "y" * 1000 + "target" + "z" * 1000,
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ToolExecutionError, match="2 times") as caught:
+        EditTool(tmp_path).execute(
+            {"path": "long.txt", "old_text": "target", "new_text": "updated"}
+        )
+
+    candidates = str(caught.value).splitlines()[1:3]
+    assert len(candidates) == 2
+    assert all(len(candidate) <= 140 for candidate in candidates)
+
+
+def test_edit_missing_match_gives_short_preview_and_recovery_hint(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "example.txt"
+    path.write_text("actual\n", encoding="utf-8")
+    old_text = "X" * 200 + "\nnot present"
+
+    with pytest.raises(ToolExecutionError, match="not found") as caught:
+        EditTool(tmp_path).execute(
+            {"path": "example.txt", "old_text": old_text, "new_text": "new"}
+        )
+
+    output = str(caught.value)
+    assert "old_text starts with" in output
+    assert "use read or grep" in output
+    assert "X" * 200 not in output
+    assert path.read_text(encoding="utf-8") == "actual\n"
+
+
+def test_edit_rejects_identical_text_before_writing(tmp_path: Path) -> None:
+    path = tmp_path / "example.txt"
+    path.write_text("same\n", encoding="utf-8")
+    before = path.stat().st_mtime_ns
+
+    with pytest.raises(ToolExecutionError, match="identical"):
+        EditTool(tmp_path).execute(
+            {"path": "example.txt", "old_text": "same", "new_text": "same"}
+        )
+
+    assert path.read_text(encoding="utf-8") == "same\n"
+    assert path.stat().st_mtime_ns == before
+
+
+def test_edit_can_delete_unique_text(tmp_path: Path) -> None:
+    path = tmp_path / "example.txt"
+    path.write_text("keep delete", encoding="utf-8")
+
+    result = EditTool(tmp_path).execute(
+        {"path": "example.txt", "old_text": " delete", "new_text": ""}
+    )
+
+    assert result.startswith("Edited ")
+    assert path.read_text(encoding="utf-8") == "keep"
+
+
 def test_bash_executes_successful_command(tmp_path: Path) -> None:
     result = BashTool(tmp_path).execute({"command": "python -c \"print('shell-ok')\""})
 
     assert "Exit code: 0" in result
     assert "shell-ok" in result
+
+
+def test_bash_workdir_applies_to_one_call_only(tmp_path: Path) -> None:
+    nested = tmp_path / "nested"
+    nested.mkdir()
+    tool = BashTool(tmp_path)
+    command = 'python -c "import os; print(os.path.basename(os.getcwd()))"'
+
+    nested_result = tool.execute({"command": command, "workdir": "nested"})
+    root_result = tool.execute({"command": command})
+    absolute_result = tool.execute({"command": command, "workdir": str(nested)})
+
+    assert "stdout:\nnested" in nested_result
+    assert f"stdout:\n{tmp_path.name}" in root_result
+    assert "stdout:\nnested" in absolute_result
+
+
+@pytest.mark.parametrize(
+    ("workdir", "error"),
+    [
+        ("", "non-empty string"),
+        (123, "non-empty string"),
+        ("missing", "does not exist"),
+        ("file.txt", "not a directory"),
+        ("..", "outside the workspace"),
+    ],
+)
+def test_bash_rejects_invalid_workdir_before_start(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    workdir: object,
+    error: str,
+) -> None:
+    (tmp_path / "file.txt").write_text("text", encoding="utf-8")
+    popen = Mock()
+    monkeypatch.setattr("codehead.tools.bash.subprocess.Popen", popen)
+
+    with pytest.raises(ToolExecutionError, match=error):
+        BashTool(tmp_path).execute(
+            {"command": "echo should-not-run", "workdir": workdir}
+        )
+    popen.assert_not_called()
+
+
+def test_bash_rejects_absolute_workdir_outside_workspace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    popen = Mock()
+    monkeypatch.setattr("codehead.tools.bash.subprocess.Popen", popen)
+
+    with pytest.raises(ToolExecutionError, match="outside the workspace"):
+        BashTool(tmp_path).execute(
+            {"command": "echo should-not-run", "workdir": str(tmp_path.parent)}
+        )
+    popen.assert_not_called()
 
 
 def test_bash_reports_nonzero_exit(tmp_path: Path) -> None:

@@ -72,9 +72,9 @@ Codehead 默认使用 `deepseek-flash` 和 `https://api.deepseek.com`。可通�
 
 当前 `read`、`write`、`edit`、`glob` 和 `grep` 工具只能访问 workspace 内的文件。
 `glob` 和 `grep` 依赖系统安装的 [ripgrep](https://github.com/BurntSushi/ripgrep)；
-启动时若找不到 `rg` 会明确报错。`bash` 工具
-以 workspace 为工作目录，但不提供进程沙箱；Windows 使用 PowerShell，Unix
-使用 Bash。
+启动时若找不到 `rg` 会明确报错。`bash` 默认以 workspace 为工作目录，可通过
+`workdir` 为单次调用指定 workspace 内的目录；它不提供进程沙箱。Windows 使用
+PowerShell，Unix 使用 Bash。
 
 ## 流式事件
 
@@ -125,4 +125,7 @@ limit=100)` 使用区分大小写的逐行正则搜索并返回 `路径:行号:�
 及符号链接规则；显式 glob 可能覆盖部分忽略规则。超限时需缩小路径或模式。
 
 `bash` 持续排空 stdout 和 stderr，各保留最多 20 KiB 的头尾片段，等待真实退出码或
-60 秒超时。`write` 与 `edit` 仍返回简短摘要。
+60 秒超时。`workdir` 只对本次调用生效，不会改变后续命令的默认目录。
+`edit` 仅替换唯一精确匹配；找不到文本时会提示重新用 `read` 或 `grep` 定位，
+多处匹配时列出最多 5 个行列位置和短上下文供修正。相同的新旧文本会报错，
+上述失败都不会写文件。`write` 与成功的 `edit` 仍返回简短摘要。
