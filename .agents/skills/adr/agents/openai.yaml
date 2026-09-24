@@ -1,0 +1,7 @@
+interface:
+  display_name: "Architecture Decision Record"
+  short_description: "新增、取代或维护 docs/adr/ 下的架构决策记录并更新索引"
+  default_prompt: "判断本次变更是否需要 ADR；需要则按 docs/adr/template.md 写入新 ADR，处理取代关系，并更新 docs/adr/README.md 的索引。"
+
+policy:
+  allow_implicit_invocation: false
