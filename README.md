@@ -76,19 +76,77 @@ Codehead 默认使用 `deepseek-flash` 和 `https://api.deepseek.com`。可通�
 `workdir` 为单次调用指定 workspace 内的目录；它不提供进程沙箱。Windows 使用
 PowerShell，Unix 使用 Bash。
 
+## 工具权限
+
+AgentLoop 在启动工具前检查权限。默认 `read`、`glob`、`grep` 为 `allow`；
+`write`、`edit`、`bash` 及其他工具为 `ask`。CLI 的 `ask` 提示会展示完整调用参数，
+可选择仅本次批准、本会话批准或拒绝；直接调用 AgentLoop 且没有批准回调时，
+`ask` 会被拒绝。`deny` 和用户拒绝都会产生 `denied` 工具结果，模型可以据此调整方案。
+
+可在 workspace 的 `.codehead/permissions.toml` 放置启动时读取的规则；文件不存在时
+使用上述默认值。例如：
+
+```toml
+[[rules]]
+tool = "write"
+action = "deny"
+path = "private/*"
+
+[[rules]]
+tool = "grep"
+action = "deny"
+path = "private/*"
+
+[[rules]]
+tool = "bash"
+action = "allow"
+command = "git status --short"
+workdir = "."
+```
+
+规则按文件顺序取首个匹配项。每条规则必须包含 `tool` 和 `action`（`allow`、`ask`、
+`deny`）。文件工具 `read`、`write`、`edit`、`glob`、`grep` 可加 `path`，匹配解析后的
+workspace 相对路径；`bash` 可加完整命令字符串 `command` 和工作目录 `workdir`。
+路径模式使用 glob，`*` 可跨目录；多个条件须全部匹配。规则按工具分别配置，
+`read` 的拒绝规则不会自动限制 `grep`。对 `grep` / `glob` 的 `ask`、`deny` 路径规则，
+只要搜索根可能覆盖规则对应的路径，就对整次检索询问或拒绝。例如 `path="private/*"`
+会拦住从 `.` 或 `private` 发起的检索；无法确定目录前缀时会保守拦截，可能误拦。
+`allow` 路径规则仍只匹配搜索根，排在前面的 `allow` 可以覆盖后面的限制规则。
+规则在启动时校验并固定，修改配置需重新启动。`.codehead/` 默认不纳入 Git。
+
+本会话批准仅复用于同工具、同目标：文件工具为同一路径，`bash` 为同一命令及工作目录。
+内容等其他参数可变化。批准只在当前进程有效，`--resume` 后重新询问，且不能覆盖
+配置中的 `deny`。用户拒绝后，同一回合内同工具同目标的重试直接拒绝；下一回合重新询问。
+`ToolApprovalRequested` 表示调用需要授权，即使没有批准回调、随后会直接拒绝，也会发出该事件。
+权限判断只针对调用参数，`glob` / `grep` 不逐项检查搜索结果；`bash` 仍无沙箱，
+可能访问 workspace 外的文件，也能绕过文件工具的路径规则。底层 `ToolRuntime` 的直接调用
+由宿主程序自行负责授权。
+
+CLI 在启动时加载权限文件；嵌入调用必须显式传入策略，且策略 workspace 须与内置工具一致：
+
+```python
+from codehead.agent import AgentLoop
+from codehead.permissions import PermissionPolicy
+
+policy = PermissionPolicy.from_file(
+    workspace, (tool.name for tool in agent.tools.definitions())
+)
+loop = AgentLoop(agent, permission_policy=policy)
+```
+
 ## 流式事件
 
 Provider 和 AgentLoop 使用异步流，事件类型统一从 `codehead.models` 导入。
 Provider 输出 `LLMTextDelta`，最后输出一次 `LLMResponseCompleted`；Loop 输出
 `TurnStarted`、`ModelStarted`、`AssistantTextDelta`、`ModelCompleted`、`ToolStarted`、
-`ToolCompleted` 和最终的 `TurnCompleted`，以及失败或取消时的 `TurnFailed` / `TurnCancelled`、压缩期间的
+`ToolCompleted` 和最终的 `TurnCompleted`，以及等待授权时的 `ToolApprovalRequested`、失败或取消时的 `TurnFailed` / `TurnCancelled`、压缩期间的
 `ContextCompactionStarted` / `ContextCompacted`。`step` 从 1 开始，表示本回合第几次
 正常模型调用；摘要请求不占用 `max_steps`，摘要增量不作为助手答案展示。
 
 文本增量仅用于即时展示。Loop 校验完整响应的 FinishReason 后才保存 assistant
 消息、发送 `ModelCompleted` 和执行工具；工具结果保存后才发送 `ToolCompleted`。
 CLI 不重复打印完成事件中的文本，也不默认展开工具输出。事件包含回合 ID，工具事件还包含执行记录 ID；
-`ToolCompleted.result.outcome` 区分 `succeeded`、`failed`、`cancelled` 和 `skipped`。
+`ToolCompleted.result.outcome` 区分 `succeeded`、`failed`、`cancelled`、`skipped` 和 `denied`。
 模型失败和步数耗尽仍通过
 异常报告；CLI 会显示回合错误并继续使用同一 Session，保留本轮 user 消息及此前已提交
 的工具历史，不自动重试。工具业务失败通过 `ToolResult.is_error` 回传模型。
@@ -98,6 +156,7 @@ CLI 不重复打印完成事件中的文本，也不默认展开工具输出。�
 
 ```python
 from contextlib import aclosing
+
 
 async def consume_turn(loop, session, user_input):
     async with aclosing(loop.stream(session, user_input)) as events:

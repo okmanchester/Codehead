@@ -78,11 +78,19 @@ class ToolStarted(TurnEvent):
     tool_call: ToolCall
 
 
+class ToolApprovalRequested(TurnEvent):
+    execution_id: str
+    type: Literal["tool.approval_requested"] = "tool.approval_requested"
+    step: int = Field(ge=1)
+    tool_call: ToolCall
+
+
 class ToolCompleted(TurnEvent):
     execution_id: str | None = None
     type: Literal["tool.completed"] = "tool.completed"
     step: int = Field(ge=1)
     result: ToolResult
+    tool_name: str | None = None
 
 
 class TurnCompleted(TurnEvent):
@@ -100,6 +108,7 @@ AgentEvent = Annotated[
     | ContextCompacted
     | AssistantTextDelta
     | ModelCompleted
+    | ToolApprovalRequested
     | ToolStarted
     | ToolCompleted
     | TurnCompleted,

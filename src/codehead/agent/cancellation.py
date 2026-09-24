@@ -27,6 +27,7 @@ class TurnControl:
     worker: asyncio.Task[ToolResult] | None = None
     execution: ToolExecution | None = None
     cleanup: asyncio.Task[None] | None = None
+    denied_targets: set[tuple[str, ...]] = field(default_factory=set)
 
     def check(self) -> None:
         if self.cancel.is_set():

@@ -30,6 +30,7 @@ from codehead.models import (
     TurnCompleted,
     TurnFailed,
 )
+from codehead.permissions import PermissionPolicy, PermissionRule
 from codehead.session import Session, SQLiteSessionStore
 from codehead.tools import Tool, ToolRegistry
 
@@ -93,6 +94,9 @@ def make_loop(provider, tool=None, *, max_steps=4):
             system_prompt="system",
         ),
         max_steps=max_steps,
+        permission_policy=PermissionPolicy(
+            Path.cwd(), [PermissionRule(tool.name, "allow")] if tool else []
+        ),
     )
 
 

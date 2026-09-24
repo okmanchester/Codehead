@@ -1,5 +1,6 @@
 import asyncio
 import json
+from pathlib import Path
 from typing import ClassVar
 
 import pytest
@@ -35,8 +36,13 @@ from codehead.models import (
     TurnStarted,
     UserMessage,
 )
+from codehead.permissions import ApprovalChoice, PermissionPolicy
 from codehead.session import Session, SQLiteSessionStore
 from codehead.tools import Tool, ToolRegistry
+
+
+async def approve_once(call: ToolCall) -> ApprovalChoice:
+    return "once"
 
 
 class SummaryProvider(LLMProvider):
@@ -347,6 +353,8 @@ def test_tool_loop_compacts_between_complete_exchanges_without_spending_steps(st
         Agent(provider=provider, tools=ToolRegistry([tool]), system_prompt="sys"),
         max_steps=4,
         context_budget=8192,
+        permission_policy=PermissionPolicy(Path.cwd()),
+        approve=approve_once,
     )
     session = Session(store=store)
 
@@ -388,6 +396,7 @@ def test_checkpoint_failure_emits_no_success_or_normal_model_event(store):
     loop = AgentLoop(
         Agent(provider=provider, tools=ToolRegistry(), system_prompt="sys"),
         context_budget=4096,
+        permission_policy=PermissionPolicy(Path.cwd()),
     )
     events = []
 
@@ -428,6 +437,7 @@ def test_cancel_during_summary_preserves_previous_checkpoint(store):
     loop = AgentLoop(
         Agent(provider=provider, tools=ToolRegistry(), system_prompt="sys"),
         context_budget=4096,
+        permission_policy=PermissionPolicy(Path.cwd()),
     )
     events = []
 
@@ -530,7 +540,9 @@ def test_message_archive_failure_prevents_completion_and_further_tools(
             WHEN NEW.message_json LIKE '%"role":"{failed_role}"%'
             BEGIN SELECT RAISE(ABORT, 'message failed'); END""")
     loop = AgentLoop(
-        Agent(provider=provider, tools=ToolRegistry([tool]), system_prompt="sys")
+        Agent(provider=provider, tools=ToolRegistry([tool]), system_prompt="sys"),
+        permission_policy=PermissionPolicy(Path.cwd()),
+        approve=approve_once,
     )
     events = []
 

@@ -2,6 +2,7 @@ import asyncio
 import sqlite3
 from contextlib import closing
 from io import StringIO
+from pathlib import Path
 from typing import ClassVar
 from unittest.mock import Mock, patch
 
@@ -29,6 +30,7 @@ from codehead.models import (
     ToolMessage,
     UserMessage,
 )
+from codehead.permissions import PermissionPolicy, PermissionRule
 from codehead.session import Session, SQLiteSessionStore
 from codehead.tools import Tool, ToolRegistry
 
@@ -64,9 +66,17 @@ class CountingTool(Tool):
 
 
 def loop_for(provider, *, tools=None, prompt="saved instructions", max_steps=20):
+    registry = tools or ToolRegistry()
     return AgentLoop(
-        Agent(provider=provider, tools=tools or ToolRegistry(), system_prompt=prompt),
+        Agent(provider=provider, tools=registry, system_prompt=prompt),
         max_steps=max_steps,
+        permission_policy=PermissionPolicy(
+            Path.cwd(),
+            [
+                PermissionRule(definition.name, "allow")
+                for definition in registry.definitions()
+            ],
+        ),
     )
 
 
@@ -236,6 +246,7 @@ def test_actual_compaction_failure_restores_previous_summary_and_active_messages
             provider=provider, tools=ToolRegistry(), system_prompt="saved instructions"
         ),
         context_budget=4096,
+        permission_policy=PermissionPolicy(config.workspace),
     )
     inputs = iter(["continue", "exit"])
     assert (

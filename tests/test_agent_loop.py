@@ -31,6 +31,7 @@ from codehead.models import (
     TurnStarted,
     UserMessage,
 )
+from codehead.permissions import PermissionPolicy, PermissionRule
 from codehead.prompt import build_system_prompt
 from codehead.session import Session
 from codehead.tools import ReadTool, Tool, ToolRegistry
@@ -107,7 +108,28 @@ def make_loop(
         tools=tools or ToolRegistry(),
         system_prompt="system prompt",
     )
-    return AgentLoop(agent, max_steps=max_steps)
+    workspace = next(
+        (
+            tool.workspace
+            for definition in agent.tools.definitions()
+            if isinstance((tool := agent.tools.get(definition.name)), ReadTool)
+        ),
+        Path.cwd(),
+    )
+    return AgentLoop(
+        agent,
+        max_steps=max_steps,
+        permission_policy=PermissionPolicy(
+            workspace,
+            [
+                PermissionRule(name, "allow")
+                for name in {
+                    "unknown",
+                    *(definition.name for definition in agent.tools.definitions()),
+                }
+            ],
+        ),
+    )
 
 
 def test_direct_final_answer_and_system_prompt_added_once() -> None:

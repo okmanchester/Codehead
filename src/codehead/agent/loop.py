@@ -1,7 +1,7 @@
 """Core Codehead agent loop."""
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import aclosing
 
 from codehead.agent.agent import Agent
@@ -23,6 +23,8 @@ from codehead.models import (
     LLMTextDelta,
     ModelCompleted,
     ModelStarted,
+    ToolApprovalRequested,
+    ToolCall,
     ToolCompleted,
     ToolResult,
     ToolStarted,
@@ -31,6 +33,7 @@ from codehead.models import (
     TurnFailed,
     TurnStarted,
 )
+from codehead.permissions import ApprovalChoice, PermissionPolicy
 from codehead.session import Session
 from codehead.session.session import Turn
 from codehead.tools.runtime import ToolRuntime
@@ -40,15 +43,40 @@ class AgentLoop:
     """Drive model responses and tool results until a final answer exists."""
 
     def __init__(
-        self, agent: Agent, max_steps: int = 20, *, context_budget: int = 32768
+        self,
+        agent: Agent,
+        max_steps: int = 20,
+        *,
+        context_budget: int = 32768,
+        permission_policy: PermissionPolicy,
+        approve: Callable[[ToolCall], Awaitable[ApprovalChoice]] | None = None,
     ) -> None:
         if max_steps < 1:
             raise ValueError("max_steps must be at least 1")
+        if not isinstance(permission_policy, PermissionPolicy):
+            raise TypeError("permission_policy must be a PermissionPolicy")
+        for definition in agent.tools.definitions():
+            tool = agent.tools.get(definition.name)
+            workspace = getattr(tool, "workspace", None)
+            if workspace is not None and workspace != permission_policy.workspace:
+                raise ValueError(
+                    f"Permission workspace does not match tool '{definition.name}'"
+                )
         self._agent = agent
         self._max_steps = max_steps
         self._tool_runtime = ToolRuntime(agent.tools)
         self._context = ContextManager(agent.provider, context_budget)
+        self._permissions = permission_policy
+        self._approve = approve
         self._controls: dict[str, TurnControl] = {}
+
+    def set_approval_callback(
+        self, callback: Callable[[ToolCall], Awaitable[ApprovalChoice]] | None
+    ) -> None:
+        """Set the interactive approval handler before starting a turn."""
+        if self._controls:
+            raise RuntimeError("Cannot change approval handler during an active turn")
+        self._approve = callback
 
     async def aclose(self) -> None:
         """Close the provider after all turns have finished."""
@@ -225,6 +253,54 @@ class AgentLoop:
                 return
             for execution in turn.tools:
                 control.check()
+                action = self._permissions.action(execution.call)
+                denial_key = self._permissions.denial_key(execution.call)
+                denial_source = "permission policy"
+                if action == "ask" and denial_key in control.denied_targets:
+                    action = "deny"
+                    denial_source = "user earlier in this turn"
+                elif action == "ask" and not self._permissions.is_granted(
+                    session, execution.call
+                ):
+                    yield ToolApprovalRequested(
+                        step=step,
+                        tool_call=execution.call,
+                        execution_id=execution.id,
+                    )
+                    control.check()
+                    choice = (
+                        await self._approve(execution.call)
+                        if self._approve is not None
+                        else "deny"
+                    )
+                    control.check()
+                    if choice not in ("once", "session", "deny"):
+                        raise ValueError(f"Invalid approval choice: {choice!r}")
+                    if choice == "session":
+                        self._permissions.grant(session, execution.call)
+                    if choice == "deny":
+                        action = "deny"
+                        denial_source = (
+                            "user"
+                            if self._approve is not None
+                            else "missing approval handler"
+                        )
+                        if self._approve is not None:
+                            control.denied_targets.add(denial_key)
+                if action == "deny":
+                    result = ToolResult(
+                        tool_call_id=execution.call.id,
+                        output=f"Denied by {denial_source}: tool call was not executed",
+                        outcome="denied",
+                    )
+                    session.complete_tool(turn, execution, result)
+                    yield ToolCompleted(
+                        step=step,
+                        result=result,
+                        execution_id=execution.id,
+                        tool_name=execution.call.name,
+                    )
+                    continue
                 yield ToolStarted(
                     step=step, tool_call=execution.call, execution_id=execution.id
                 )
@@ -238,7 +314,12 @@ class AgentLoop:
                 session.complete_tool(turn, execution, result)
                 control.worker = None
                 control.execution = None
-                yield ToolCompleted(step=step, result=result, execution_id=execution.id)
+                yield ToolCompleted(
+                    step=step,
+                    result=result,
+                    execution_id=execution.id,
+                    tool_name=execution.call.name,
+                )
                 control.check()
         raise AgentAbortedError(
             f"Agent did not produce a final answer within {self._max_steps} steps"

@@ -2,6 +2,7 @@
 
 import argparse
 import asyncio
+import json
 import signal
 import sys
 import threading
@@ -22,10 +23,12 @@ from codehead.models import (
     ContextCompactionStarted,
     ModelCompleted,
     SystemMessage,
+    ToolApprovalRequested,
     ToolCompleted,
     ToolStarted,
     TurnCancelled,
 )
+from codehead.permissions import ApprovalChoice, PermissionPolicy
 from codehead.prompt import build_system_prompt
 from codehead.session import Session, SQLiteSessionStore
 from codehead.tools import (
@@ -43,12 +46,6 @@ from codehead.tools.search import find_ripgrep
 def build_agent_loop(config: Config) -> AgentLoop:
     """Construct the v0.1 agent and its built-in tools."""
     rg_executable = find_ripgrep()
-    provider = OpenAIProvider(
-        model=config.model,
-        api_key=config.api_key,
-        base_url=config.base_url,
-        disable_thinking=True,
-    )
     tools = ToolRegistry(
         [
             ReadTool(config.workspace),
@@ -59,12 +56,23 @@ def build_agent_loop(config: Config) -> AgentLoop:
             BashTool(config.workspace),
         ]
     )
+    policy = PermissionPolicy.from_file(
+        config.workspace, (definition.name for definition in tools.definitions())
+    )
+    provider = OpenAIProvider(
+        model=config.model,
+        api_key=config.api_key,
+        base_url=config.base_url,
+        disable_thinking=True,
+    )
     agent = Agent(
         provider=provider,
         tools=tools,
         system_prompt=build_system_prompt(config.workspace),
     )
-    return AgentLoop(agent, context_budget=config.context_budget)
+    return AgentLoop(
+        agent, context_budget=config.context_budget, permission_policy=policy
+    )
 
 
 async def run_repl(
@@ -93,6 +101,36 @@ async def _run_repl(
     console.print("Codehead is ready. Type 'exit' or 'quit' to leave.")
     current: asyncio.Task[None] | None = None
     stopping = False
+    approval_input = False
+
+    async def approve(call) -> ApprovalChoice:
+        nonlocal approval_input
+        console.print(Text(f"Permission> {call.name} requested with arguments:"))
+        console.print(Text(json.dumps(call.arguments, ensure_ascii=False, indent=2)))
+        while True:
+            approval_input = True
+            try:
+                answer = (
+                    reader(
+                        "[bold yellow]Allow once [y], this session [s], deny [n; default]?[/bold yellow] "
+                    )
+                    .strip()
+                    .lower()
+                )
+            except EOFError as exc:
+                raise asyncio.CancelledError from exc
+            finally:
+                approval_input = False
+            if answer in ("y", "yes"):
+                return "once"
+            if answer in ("s", "session"):
+                return "session"
+            if answer in ("", "n", "no"):
+                return "deny"
+            console.print(Text("Enter y, s, or n."))
+
+    if isinstance(loop, AgentLoop):
+        loop.set_approval_callback(approve)
 
     def interrupt(signum: int, frame: object) -> None:
         nonlocal stopping
@@ -104,6 +142,8 @@ async def _run_repl(
                 stopping = True
                 if not loop.request_cancel(session):
                     current.cancel()
+            if approval_input:
+                raise KeyboardInterrupt
 
     previous = None
     if threading.current_thread() is threading.main_thread():
@@ -166,6 +206,8 @@ async def _run_repl(
     finally:
         if previous is not None:
             signal.signal(signal.SIGINT, previous)
+        if isinstance(loop, AgentLoop):
+            loop.set_approval_callback(None)
 
 
 async def _consume_turn(
@@ -204,10 +246,12 @@ async def _consume_turn(
                         event.tool_call.name
                     )
                     console.print(Text(f"Tool> {event.tool_call.name}: started"))
+                elif isinstance(event, ToolApprovalRequested):
+                    tool_names[event.execution_id] = event.tool_call.name
                 elif isinstance(event, ToolCompleted):
                     name = tool_names.pop(
                         event.execution_id or event.result.tool_call_id,
-                        event.result.tool_call_id,
+                        event.tool_name or event.result.tool_call_id,
                     )
                     console.print(Text(f"Tool> {name}: {event.result.outcome}"))
     except KeyboardInterrupt as exc:
@@ -283,7 +327,7 @@ async def _main(argv: list[str] | None = None) -> int:
     try:
         config = Config.from_env()
         loop = build_agent_loop(config)
-    except (CodeheadError, ValueError) as exc:
+    except (CodeheadError, ValueError, TypeError) as exc:
         console.print(Text(f"Error: {exc}", style="bold red"))
         return 1
     try:

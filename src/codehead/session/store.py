@@ -98,7 +98,7 @@ class SQLiteSessionStore:
                         assistant_sequence INTEGER NOT NULL,
                         position INTEGER NOT NULL,
                         tool_call_id TEXT NOT NULL,
-                        status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed','cancelled','skipped')),
+                        status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed','cancelled','skipped','denied')),
                         result_sequence INTEGER,
                         UNIQUE(turn_id, assistant_sequence, position),
                         UNIQUE(session_id, result_sequence),
@@ -106,6 +106,7 @@ class SQLiteSessionStore:
                         FOREIGN KEY(session_id, result_sequence) REFERENCES messages(session_id, sequence)
                     )
                 """)
+                self._migrate_tool_outcomes(connection)
         except (OSError, sqlite3.Error, StorageError) as exc:
             self.close()
             raise StorageError(f"Cannot open session archive: {exc}") from exc
@@ -128,6 +129,36 @@ class SQLiteSessionStore:
         connection.execute(
             "UPDATE sessions SET updated_at = created_at WHERE updated_at IS NULL"
         )
+
+    @staticmethod
+    def _migrate_tool_outcomes(connection: sqlite3.Connection) -> None:
+        """Rebuild the old CHECK constraint without changing archived executions."""
+        schema = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tool_executions'"
+        ).fetchone()[0]
+        if "'denied'" in schema:
+            return
+        connection.execute("ALTER TABLE tool_executions RENAME TO tool_executions_old")
+        connection.execute("""
+            CREATE TABLE tool_executions (
+                id TEXT PRIMARY KEY,
+                turn_id TEXT NOT NULL REFERENCES turns(id),
+                session_id TEXT NOT NULL,
+                assistant_sequence INTEGER NOT NULL,
+                position INTEGER NOT NULL,
+                tool_call_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed','cancelled','skipped','denied')),
+                result_sequence INTEGER,
+                UNIQUE(turn_id, assistant_sequence, position),
+                UNIQUE(session_id, result_sequence),
+                FOREIGN KEY(session_id, assistant_sequence) REFERENCES messages(session_id, sequence),
+                FOREIGN KEY(session_id, result_sequence) REFERENCES messages(session_id, sequence)
+            )
+        """)
+        connection.execute(
+            "INSERT INTO tool_executions SELECT * FROM tool_executions_old"
+        )
+        connection.execute("DROP TABLE tool_executions_old")
 
     @contextmanager
     def _transaction(self) -> Iterator[sqlite3.Connection]:

@@ -1,6 +1,6 @@
 # 0006. workspace 文件边界、无沙箱与环境清理
 
-- 状态：Accepted
+- 状态：Superseded by [0014](0014-tool-permissions.md)
 - 日期：2026-09-22
 - 来源：`afa3983` 初步实现四个基础工具，OpenAI Chat Completions适配器；`1e05fd2` Turn / Tool 生命周期与可控中断收尾
 

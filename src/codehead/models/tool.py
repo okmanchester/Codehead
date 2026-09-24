@@ -47,7 +47,9 @@ class ToolResult(CodeheadModel):
     output: str
     is_error: bool = False
 
-    outcome: Literal["succeeded", "failed", "cancelled", "skipped"] = "succeeded"
+    outcome: Literal["succeeded", "failed", "cancelled", "skipped", "denied"] = (
+        "succeeded"
+    )
 
     @model_validator(mode="before")
     @classmethod
