@@ -80,7 +80,7 @@ class ReadTool(Tool):
     parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {
-            "path": {"type": "string"},
+            "path": {"type": "string", "minLength": 1},
             "offset": {"type": "integer", "minimum": 1},
             "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIMIT},
         },

@@ -62,7 +62,10 @@ def resolve_workspace_path(workspace: Path, path_value: str) -> Path:
     if not candidate.is_absolute():
         candidate = workspace / candidate
 
-    resolved = candidate.resolve()
+    try:
+        resolved = candidate.resolve()
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise ToolExecutionError(f"Invalid workspace path: {path_value}") from exc
     if not resolved.is_relative_to(workspace):
         raise ToolExecutionError(f"Path is outside the workspace: {path_value}")
     return resolved

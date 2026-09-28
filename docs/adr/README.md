@@ -69,7 +69,7 @@ ADR 是**增量演进**的，不是一次性快照：
 | [0002](0002-unified-domain-models.md) | 统一领域模型层 `codehead.models` | Accepted | 2026-09-22 | `d300282` |
 | [0003](0003-strict-finish-reason.md) | FinishReason 严格语义与零副作用拒绝 | Accepted | 2026-09-22 | `d300282` |
 | [0004](0004-async-streaming-commit-after-validation.md) | 异步流式事件与"校验后提交" | Accepted | 2026-09-23 | `873ae9d` |
-| [0005](0005-tool-runtime-and-output-limits.md) | 工具统一经 `ToolRuntime` 执行与分层输出上限 | Accepted | 2026-09-23 | `0109042` |
+| [0005](0005-tool-runtime-and-output-limits.md) | 工具统一经 `ToolRuntime` 执行与分层输出上限 | Superseded by [0015](0015-tool-system-v1-freeze.md) | 2026-09-23 | `0109042` |
 | [0006](0006-workspace-boundary-no-sandbox.md) | workspace 文件边界、无沙箱与环境清理 | Superseded by [0014](0014-tool-permissions.md) | 2026-09-22 | `afa3983`、`1e05fd2` |
 | [0007](0007-tool-behavior-tradeoffs.md) | 工具行为取舍：read 分页、edit 唯一精确匹配、检索依赖 ripgrep | Accepted | 2026-09-23 | `70af0ec`、`ce3f600` |
 | [0008](0008-append-only-archive.md) | append-only SQLite 存档与活跃上下文分离 | Accepted | 2026-09-23 | `7faa835` |
@@ -79,6 +79,7 @@ ADR 是**增量演进**的，不是一次性快照：
 | [0012](0012-cancellation-and-process-trees.md) | 可控中断语义与跨平台进程树回收 | Accepted | 2026-09-23 | `1e05fd2` |
 | [0013](0013-sync-provider-path.md) | 同步、非流式的 Provider 调用路径 | Superseded by [0004](0004-async-streaming-commit-after-validation.md) | 2026-09-22 | `afa3983`、`d300282` |
 | [0014](0014-tool-permissions.md) | 工具调用权限与会话授权 | Accepted | 2026-09-24 | 工作区未提交变更；提交时补来源 |
+| [0015](0015-tool-system-v1-freeze.md) | 工具系统 v1 冻结：参数契约、文件提交与错误边界 | Accepted | 2026-09-24 | 工作区未提交变更；提交时补来源 |
 
 模板见 [template.md](template.md)。
 

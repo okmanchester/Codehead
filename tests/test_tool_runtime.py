@@ -3,7 +3,7 @@ from typing import ClassVar
 
 import pytest
 
-from codehead.errors import ToolExecutionError
+from codehead.errors import ToolExecutionError, ToolInternalError
 from codehead.models import JsonObject, JsonValue, ToolCall
 from codehead.tools import Tool, ToolRegistry, ToolRuntime
 
@@ -51,14 +51,8 @@ def test_runtime_uses_utf8_bytes_and_preserves_head_tail(
         assert result.output == text
 
 
-@pytest.mark.parametrize(
-    "error",
-    [
-        ToolExecutionError("known " + "x" * 200 + " tail"),
-        RuntimeError("boom " + "x" * 200 + " tail"),
-    ],
-)
-def test_runtime_limits_known_and_unexpected_error_results(error: Exception) -> None:
+def test_runtime_limits_expected_error_results() -> None:
+    error = ToolExecutionError("known " + "x" * 200 + " tail")
     runtime = ToolRuntime(ToolRegistry([FailingTool(error)]), max_output_bytes=100)
 
     result = runtime.execute(ToolCall(id="call", name="failing"))
@@ -70,15 +64,23 @@ def test_runtime_limits_known_and_unexpected_error_results(error: Exception) -> 
     assert "[output truncated]" in result.output
 
 
-def test_unknown_tool_and_non_text_output_become_errors() -> None:
+def test_unknown_tool_is_expected_but_non_text_output_is_internal_error() -> None:
     registry = ToolRegistry([ReturningTool("ok")])
     unknown = ToolRuntime(registry).execute(ToolCall(id="missing", name="missing"))
     assert unknown.is_error and "Unknown tool" in unknown.output
 
     tool = registry.get("returning")
     tool.execute = lambda arguments: None  # type: ignore[method-assign,return-value]
-    invalid = ToolRuntime(registry).execute(ToolCall(id="invalid", name="returning"))
-    assert invalid.is_error and "non-text output" in invalid.output
+    with pytest.raises(ToolInternalError, match="non-text output"):
+        ToolRuntime(registry).execute(ToolCall(id="invalid", name="returning"))
+
+
+def test_unexpected_error_preserves_cause_and_is_not_a_result() -> None:
+    error = RuntimeError("boom")
+    runtime = ToolRuntime(ToolRegistry([FailingTool(error)]))
+    with pytest.raises(ToolInternalError, match="RuntimeError: boom") as caught:
+        runtime.execute(ToolCall(id="call", name="failing"))
+    assert caught.value.__cause__ is error
 
 
 def test_runtime_does_not_swallow_process_level_interrupt() -> None:

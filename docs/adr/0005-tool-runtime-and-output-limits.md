@@ -1,6 +1,6 @@
 # 0005. 工具统一经 `ToolRuntime` 执行与分层输出上限
 
-- 状态：Accepted
+- 状态：Superseded by [0015](0015-tool-system-v1-freeze.md)
 - 日期：2026-09-23
 - 来源：`0109042` 完成工具输出治理
 

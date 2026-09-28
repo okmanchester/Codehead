@@ -4,10 +4,12 @@ import asyncio
 from copy import deepcopy
 from threading import Event
 
+from codehead.cancellation import settle
 from codehead.errors import (
     ToolCancelled,
     ToolCleanupError,
     ToolExecutionError,
+    ToolInternalError,
     ToolSkipped,
 )
 from codehead.models import ToolCall, ToolResult
@@ -35,8 +37,6 @@ class ToolRuntime:
         )
 
     async def execute_async(self, call: ToolCall, cancel: Event) -> ToolResult:
-        from codehead.agent.cancellation import settle
-
         worker = self.start(call, cancel)
         try:
             return await asyncio.shield(worker)
@@ -48,6 +48,8 @@ class ToolRuntime:
     def _execute_worker(self, call: ToolCall, cancel: Event) -> ToolResult:
         try:
             return self.execute(call, cancel)
+        except Exception:
+            raise
         except BaseException as exc:
             cancel.set()
             raise ToolCleanupError(
@@ -59,16 +61,23 @@ class ToolRuntime:
         if not isinstance(call, ToolCall):
             raise TypeError("call must be a ToolCall")
         try:
+            if cancel is not None and cancel.is_set():
+                raise ToolSkipped(
+                    "Skipped: cancellation requested before execution; tool did not run"
+                )
             tool = self._registry.get(call.name)
+            self._registry.validate_arguments(call.name, call.arguments)
             output = (
                 tool.execute(deepcopy(call.arguments))
                 if cancel is None
                 else tool.execute_cancellable(deepcopy(call.arguments), cancel)
             )
             if not isinstance(output, str):
-                raise ToolExecutionError(f"Tool '{call.name}' returned non-text output")
+                raise ToolInternalError(f"Tool '{call.name}' returned non-text output")
             outcome = "succeeded"
         except ToolCleanupError:
+            raise
+        except ToolInternalError:
             raise
         except (ToolCancelled, ToolSkipped) as exc:
             output = str(exc)
@@ -76,9 +85,10 @@ class ToolRuntime:
         except ToolExecutionError as exc:
             output = str(exc)
             outcome = "failed"
-        except Exception as exc:  # noqa: BLE001 - tool failures become model-visible results
-            output = f"Tool '{call.name}' failed: {exc}"
-            outcome = "failed"
+        except Exception as exc:
+            raise ToolInternalError(
+                f"Internal error in tool '{call.name}': {type(exc).__name__}: {exc}"
+            ) from exc
 
         return ToolResult(
             tool_call_id=call.id,

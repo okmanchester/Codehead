@@ -1,12 +1,22 @@
 import platform
+import stat
 from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 
 from codehead.errors import ToolExecutionError
-from codehead.models import ToolDefinition
-from codehead.tools import BashTool, EditTool, ReadTool, Tool, WriteTool
+from codehead.models import ToolCall, ToolDefinition
+from codehead.tools import (
+    BashTool,
+    EditTool,
+    GlobTool,
+    ReadTool,
+    Tool,
+    ToolRegistry,
+    ToolRuntime,
+    WriteTool,
+)
 
 
 @pytest.mark.parametrize(
@@ -196,11 +206,104 @@ def test_edit_can_delete_unique_text(tmp_path: Path) -> None:
     assert path.read_text(encoding="utf-8") == "keep"
 
 
+def test_write_preserves_supplied_newline_bytes(tmp_path: Path) -> None:
+    path = tmp_path / "line-endings.txt"
+    content = "first\r\nsecond\nthird\r\n"
+    WriteTool(tmp_path).execute({"path": path.name, "content": content})
+    assert path.read_bytes() == content.encode("utf-8")
+
+
+def test_edit_matches_read_style_lf_without_changing_untouched_bytes(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "mixed.txt"
+    path.write_bytes(b"head\r\nfirst\r\nsecond\r\ntail\nlast\r\n")
+
+    EditTool(tmp_path).execute(
+        {
+            "path": path.name,
+            "old_text": "first\nsecond",
+            "new_text": "FIRST\nSECOND",
+        }
+    )
+    assert path.read_bytes() == b"head\r\nFIRST\r\nSECOND\r\ntail\nlast\r\n"
+
+
+def test_edit_new_multiline_text_uses_nearest_existing_newline(tmp_path: Path) -> None:
+    path = tmp_path / "crlf.txt"
+    path.write_bytes(b"before\r\ntarget\r\nafter\r\n")
+    EditTool(tmp_path).execute(
+        {"path": path.name, "old_text": "target", "new_text": "new\nline"}
+    )
+    assert path.read_bytes() == b"before\r\nnew\r\nline\r\nafter\r\n"
+
+
+@pytest.mark.parametrize("tool_type", [WriteTool, EditTool])
+def test_file_replace_failure_keeps_original_and_cleans_temporary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool_type: type[Tool]
+) -> None:
+    path = tmp_path / "existing.txt"
+    original = b"before\r\n"
+    path.write_bytes(original)
+
+    def reject_replace(*args: object) -> None:
+        raise PermissionError("replace denied")
+
+    monkeypatch.setattr("codehead.tools._atomic.os.replace", reject_replace)
+    arguments = (
+        {"path": path.name, "content": "after\n"}
+        if tool_type is WriteTool
+        else {"path": path.name, "old_text": "before", "new_text": "after"}
+    )
+    with pytest.raises(ToolExecutionError, match="replace denied"):
+        tool_type(tmp_path).execute(arguments)
+    assert path.read_bytes() == original
+    assert not list(tmp_path.glob(".existing.txt.*.tmp"))
+
+
+@pytest.mark.parametrize("tool_type", [WriteTool, EditTool])
+def test_file_replace_retains_existing_mode_bits(
+    tmp_path: Path, tool_type: type[Tool]
+) -> None:
+    path = tmp_path / "existing.txt"
+    path.write_bytes(b"before\n")
+    original_mode = stat.S_IMODE(path.stat().st_mode)
+    arguments = (
+        {"path": path.name, "content": "after\n"}
+        if tool_type is WriteTool
+        else {"path": path.name, "old_text": "before", "new_text": "after"}
+    )
+    tool_type(tmp_path).execute(arguments)
+    assert stat.S_IMODE(path.stat().st_mode) == original_mode
+
+
 def test_bash_executes_successful_command(tmp_path: Path) -> None:
     result = BashTool(tmp_path).execute({"command": "python -c \"print('shell-ok')\""})
 
     assert "Exit code: 0" in result
     assert "shell-ok" in result
+
+
+@pytest.mark.skipif(platform.system() != "Windows", reason="PowerShell output")
+@pytest.mark.parametrize("command", ["pwd", "Get-Location"])
+def test_windows_bash_flushes_powershell_object_output(
+    tmp_path: Path, command: str
+) -> None:
+    result = BashTool(tmp_path).execute({"command": command})
+    assert "Exit code: 0" in result
+    assert "stdout:" in result
+    assert str(tmp_path) in result
+
+
+@pytest.mark.skipif(platform.system() != "Windows", reason="PowerShell exit status")
+def test_windows_bash_preserves_cmdlet_and_native_failure_status(
+    tmp_path: Path,
+) -> None:
+    tool = BashTool(tmp_path)
+    with pytest.raises(ToolExecutionError, match="Exit code: 1"):
+        tool.execute({"command": "Write-Error failure"})
+    with pytest.raises(ToolExecutionError, match="Exit code: 3"):
+        tool.execute({"command": 'python -c "import sys; sys.exit(3)"'})
 
 
 def test_bash_workdir_applies_to_one_call_only(tmp_path: Path) -> None:
@@ -256,6 +359,33 @@ def test_bash_rejects_absolute_workdir_outside_workspace(
             {"command": "echo should-not-run", "workdir": str(tmp_path.parent)}
         )
     popen.assert_not_called()
+
+
+@pytest.mark.parametrize("tool_type", [BashTool, GlobTool])
+def test_expected_filesystem_inspection_error_is_a_tool_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool_type: type[Tool]
+) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    original_exists = Path.exists
+
+    def denied_exists(self: Path) -> bool:
+        if self == target:
+            raise PermissionError("denied")
+        return original_exists(self)
+
+    monkeypatch.setattr(Path, "exists", denied_exists)
+    tool = tool_type(tmp_path)
+    arguments = (
+        {"command": "echo ok", "workdir": "target"}
+        if tool_type is BashTool
+        else {"pattern": "*", "path": "target"}
+    )
+    result = ToolRuntime(ToolRegistry([tool])).execute(
+        ToolCall(id="inspection", name=tool.name, arguments=arguments)
+    )
+    assert result.outcome == "failed"
+    assert "denied" in result.output
 
 
 def test_bash_reports_nonzero_exit(tmp_path: Path) -> None:

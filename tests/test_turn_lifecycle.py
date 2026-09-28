@@ -14,7 +14,7 @@ from rich.console import Console
 
 from codehead.agent import Agent, AgentLoop
 from codehead.cli import run_repl
-from codehead.errors import ResumeError, StorageError
+from codehead.errors import ResumeError, StorageError, ToolInternalError
 from codehead.llm import LLMProvider
 from codehead.models import (
     AssistantMessage,
@@ -25,7 +25,9 @@ from codehead.models import (
     LLMTextDelta,
     ModelCompleted,
     ToolCall,
+    ToolCompleted,
     ToolMessage,
+    ToolResult,
     TurnCancelled,
     TurnCompleted,
     TurnFailed,
@@ -210,6 +212,87 @@ def test_cancel_during_file_tool_waits_for_true_result_then_skips_rest(tmp_path)
         asyncio.run(make_loop(Provider([answer()])).run(restored, "continue")) == "done"
     )
     store.close()
+
+
+def test_internal_tool_defect_fails_turn_and_keeps_session_resumable(tmp_path):
+    class DefectiveTool(BarrierTool):
+        def execute(self, arguments):
+            self.calls += 1
+            raise RuntimeError("injected defect")
+
+    store = SQLiteSessionStore(tmp_path / "history.sqlite3")
+    session = Session(
+        store=store, workspace=str(tmp_path), model="model", base_url="url"
+    )
+    tool = DefectiveTool(tmp_path / "no-effect.txt")
+    provider = Provider([tools_response("first", "second"), answer()])
+    events = []
+
+    async def run():
+        async for event in make_loop(provider, tool).stream(session, "first"):
+            events.append(event)
+
+    with pytest.raises(ToolInternalError, match="injected defect"):
+        asyncio.run(run())
+    assert tool.calls == 1
+    assert provider.calls == 1
+    assert not tool.path.exists()
+    assert not any(isinstance(event, ToolCompleted) for event in events)
+    assert isinstance(events[-1], TurnFailed)
+    assert [r[6] for r in rows(store, "tool_executions", session.id)] == [
+        "internal_error",
+        "skipped",
+    ]
+    assert [r[2] for r in rows(store, "turns", session.id)] == ["failed"]
+    session.finish()
+    resumed = Session.resume(
+        session.id, store=store, workspace=str(tmp_path), model="model", base_url="url"
+    )
+    assert asyncio.run(make_loop(Provider([answer()])).run(resumed, "next")) == "done"
+    store.close()
+
+
+def test_existing_tool_results_survive_internal_error_status_migration(tmp_path):
+    database = tmp_path / "history.sqlite3"
+    store = SQLiteSessionStore(database)
+    session = Session(store=store)
+    turn = session.begin_turn("go", "system")
+    session.accept_response(
+        turn, AssistantMessage(tool_calls=(ToolCall(id="one", name="barrier"),))
+    )
+    session.complete_tool(
+        turn, turn.tools[0], ToolResult(tool_call_id="one", output="ok")
+    )
+    session.end_turn(turn, "failed", "test")
+    store.close()
+
+    with sqlite3.connect(database) as connection:
+        schema = connection.execute(
+            "SELECT sql FROM sqlite_master WHERE name = 'tool_executions'"
+        ).fetchone()[0]
+        connection.execute("ALTER TABLE tool_executions RENAME TO tool_executions_new")
+        connection.execute(schema.replace(",'internal_error'", ""))
+        connection.execute(
+            "INSERT INTO tool_executions SELECT * FROM tool_executions_new"
+        )
+        connection.execute("DROP TABLE tool_executions_new")
+
+    migrated = SQLiteSessionStore(database)
+    with migrated._transaction() as connection:
+        assert (
+            connection.execute(
+                "SELECT status FROM tool_executions WHERE tool_call_id = 'one'"
+            ).fetchone()[0]
+            == "succeeded"
+        )
+        assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
+        assert (
+            "'internal_error'"
+            in connection.execute(
+                "SELECT sql FROM sqlite_master WHERE name = 'tool_executions'"
+            ).fetchone()[0]
+        )
+    migrated.close()
 
 
 def test_external_cancel_during_model_drops_delta_and_session_can_finish(tmp_path):

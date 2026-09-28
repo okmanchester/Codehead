@@ -69,8 +69,13 @@ class _SearchTool(Tool):
         if not isinstance(value, str) or not value:
             raise ToolExecutionError("Tool argument 'path' must be a non-empty string")
         resolved = resolve_workspace_path(self.workspace, value)
-        if not resolved.exists():
-            raise ToolExecutionError(f"Search path not found: '{value}'")
+        try:
+            if not resolved.exists():
+                raise ToolExecutionError(f"Search path not found: '{value}'")
+        except OSError as exc:
+            raise ToolExecutionError(
+                f"Cannot inspect search path '{value}': {exc}"
+            ) from exc
         relative = resolved.relative_to(self.workspace).as_posix()
         return relative or "."
 
@@ -161,7 +166,7 @@ class _SearchTool(Tool):
             path = self.workspace / path
         try:
             return path.resolve().relative_to(self.workspace).as_posix()
-        except ValueError as exc:
+        except (OSError, ValueError) as exc:
             raise ToolExecutionError(
                 "ripgrep returned a path outside the workspace"
             ) from exc
@@ -177,8 +182,8 @@ class GlobTool(_SearchTool):
     parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {
-            "pattern": {"type": "string"},
-            "path": {"type": "string"},
+            "pattern": {"type": "string", "minLength": 1},
+            "path": {"type": "string", "minLength": 1},
             "limit": {"type": "integer", "minimum": 1, "maximum": MAX_RESULTS},
         },
         "required": ["pattern"],
@@ -211,9 +216,9 @@ class GrepTool(_SearchTool):
     parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {
-            "pattern": {"type": "string"},
-            "path": {"type": "string"},
-            "glob": {"type": "string"},
+            "pattern": {"type": "string", "minLength": 1},
+            "path": {"type": "string", "minLength": 1},
+            "glob": {"type": "string", "minLength": 1},
             "limit": {"type": "integer", "minimum": 1, "maximum": MAX_RESULTS},
         },
         "required": ["pattern"],

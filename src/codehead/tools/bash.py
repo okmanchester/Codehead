@@ -26,9 +26,10 @@ class BashTool(Tool):
     parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {
-            "command": {"type": "string"},
+            "command": {"type": "string", "minLength": 1},
             "workdir": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Working directory inside the workspace for this command only.",
             },
         },
@@ -55,14 +56,19 @@ class BashTool(Tool):
                 "Tool argument 'workdir' must be a non-empty string"
             )
         workdir = resolve_workspace_path(self.workspace, workdir_value)
-        if not workdir.exists():
+        try:
+            if not workdir.exists():
+                raise ToolExecutionError(
+                    f"Working directory does not exist: '{workdir_value}'"
+                )
+            if not workdir.is_dir():
+                raise ToolExecutionError(
+                    f"Working directory is not a directory: '{workdir_value}'"
+                )
+        except OSError as exc:
             raise ToolExecutionError(
-                f"Working directory does not exist: '{workdir_value}'"
-            )
-        if not workdir.is_dir():
-            raise ToolExecutionError(
-                f"Working directory is not a directory: '{workdir_value}'"
-            )
+                f"Cannot inspect working directory '{workdir_value}': {exc}"
+            ) from exc
         environment = os.environ.copy()
         environment.pop("DEEPSEEK_API_KEY", None)
 
@@ -129,11 +135,12 @@ class BashTool(Tool):
 def _shell_command(command: str) -> list[str]:
     if platform.system() == "Windows":
         wrapped_command = (
-            f"& {{ {command} }}\n"
-            "$command_succeeded = $?\n"
-            "$native_exit_code = $LASTEXITCODE\n"
-            "if ($null -ne $native_exit_code) { exit $native_exit_code }\n"
-            "if (-not $command_succeeded) { exit 1 }\n"
+            f"& {{ {command}\n"
+            "$global:__codehead_command_succeeded = $?\n"
+            "$global:__codehead_native_exit_code = $LASTEXITCODE\n"
+            "} | Out-Default\n"
+            "if ($null -ne $__codehead_native_exit_code) { exit $__codehead_native_exit_code }\n"
+            "if (-not $__codehead_command_succeeded) { exit 1 }\n"
             "exit 0"
         )
         return [

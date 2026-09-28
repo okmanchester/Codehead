@@ -98,7 +98,7 @@ class SQLiteSessionStore:
                         assistant_sequence INTEGER NOT NULL,
                         position INTEGER NOT NULL,
                         tool_call_id TEXT NOT NULL,
-                        status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed','cancelled','skipped','denied')),
+                        status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed','cancelled','skipped','denied','internal_error')),
                         result_sequence INTEGER,
                         UNIQUE(turn_id, assistant_sequence, position),
                         UNIQUE(session_id, result_sequence),
@@ -136,7 +136,7 @@ class SQLiteSessionStore:
         schema = connection.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'tool_executions'"
         ).fetchone()[0]
-        if "'denied'" in schema:
+        if "'denied'" in schema and "'internal_error'" in schema:
             return
         connection.execute("ALTER TABLE tool_executions RENAME TO tool_executions_old")
         connection.execute("""
@@ -147,7 +147,7 @@ class SQLiteSessionStore:
                 assistant_sequence INTEGER NOT NULL,
                 position INTEGER NOT NULL,
                 tool_call_id TEXT NOT NULL,
-                status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed','cancelled','skipped','denied')),
+                status TEXT NOT NULL CHECK(status IN ('pending','running','succeeded','failed','cancelled','skipped','denied','internal_error')),
                 result_sequence INTEGER,
                 UNIQUE(turn_id, assistant_sequence, position),
                 UNIQUE(session_id, result_sequence),

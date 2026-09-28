@@ -6,6 +6,7 @@ from typing import ClassVar
 
 from codehead.errors import ToolExecutionError
 from codehead.models import JsonObject, JsonValue
+from codehead.tools._atomic import replace_bytes
 from codehead.tools.base import (
     Tool,
     require_string_argument,
@@ -19,7 +20,7 @@ class WriteTool(Tool):
     parameters: ClassVar[JsonObject] = {
         "type": "object",
         "properties": {
-            "path": {"type": "string"},
+            "path": {"type": "string", "minLength": 1},
             "content": {"type": "string"},
         },
         "required": ["path", "content"],
@@ -35,11 +36,9 @@ class WriteTool(Tool):
         path = resolve_workspace_path(self.workspace, path_value)
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(content, encoding="utf-8")
+            replace_bytes(path, content.encode("utf-8"))
         except (OSError, UnicodeError) as exc:
-            raise ToolExecutionError(
-                f"Failed to write '{path_value}': {exc}"
-            ) from exc
+            raise ToolExecutionError(f"Failed to write '{path_value}': {exc}") from exc
 
         relative_path = path.relative_to(self.workspace)
         return f"Wrote {len(content)} characters to {relative_path}"

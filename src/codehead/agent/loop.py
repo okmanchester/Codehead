@@ -5,13 +5,15 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import aclosing
 
 from codehead.agent.agent import Agent
-from codehead.agent.cancellation import TurnControl, settle
+from codehead.agent.cancellation import TurnControl
 from codehead.agent.context import ContextManager, observe_usage
+from codehead.cancellation import settle
 from codehead.errors import (
     AgentAbortedError,
     ModelError,
     StorageError,
     ToolCleanupError,
+    ToolInternalError,
 )
 from codehead.models import (
     AgentEvent,
@@ -193,7 +195,18 @@ class AgentLoop:
             except StorageError as exc:
                 storage_error = exc
         # Even when the archive failed, never abandon an executing thread.
-        result = await settle(control.worker) if control.worker is not None else None
+        result = None
+        if control.worker is not None:
+            try:
+                result = await settle(control.worker)
+            except ToolInternalError:
+                if control.execution is None:
+                    raise
+                result = ToolResult(
+                    tool_call_id=control.execution.call.id,
+                    output="Internal tool error; turn aborted before a result was returned",
+                    outcome="internal_error",
+                )
         if storage_error is not None:
             raise storage_error
         if isinstance(error, (StorageError, ToolCleanupError)):

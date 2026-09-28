@@ -33,6 +33,10 @@ class ToolCleanupError(CodeheadError):
     """Fatal: a tool could not be confirmed stopped."""
 
 
+class ToolInternalError(CodeheadError):
+    """A tool violated its contract or raised an unexpected exception."""
+
+
 class ToolCancelled(ToolExecutionError):
     """A running command was stopped; side effects may have occurred."""
 

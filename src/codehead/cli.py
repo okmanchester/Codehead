@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.text import Text
 
 from codehead.agent import Agent, AgentLoop
-from codehead.agent.cancellation import settle
+from codehead.cancellation import settle
 from codehead.config import Config, LocalConfig
 from codehead.errors import CodeheadError, ResumeError, StorageError, ToolCleanupError
 from codehead.llm import OpenAIProvider
