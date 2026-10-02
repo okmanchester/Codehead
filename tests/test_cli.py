@@ -6,8 +6,9 @@ import pytest
 from rich.console import Console
 
 from codehead.cli import _main, build_agent_loop, main, run_repl
-from codehead.config import Config
-from codehead.errors import ContextError, ModelError, StorageError
+from codehead.config import RuntimeConfig
+from codehead.errors import AgentAbortedError, ContextError, ModelError, StorageError
+from codehead.llm import LLMProvider
 from codehead.models import (
     AssistantMessage,
     AssistantTextDelta,
@@ -15,6 +16,7 @@ from codehead.models import (
     ContextCompactionStarted,
     FinishReason,
     LLMResponse,
+    LLMResponseCompleted,
     ModelCompleted,
     ToolCall,
     ToolCompleted,
@@ -231,8 +233,8 @@ def test_main_closes_loop_on_exit_and_failure(failure, tmp_path) -> None:
     store = SQLiteSessionStore(tmp_path / "archive.sqlite3")
     with (
         patch(
-            "codehead.cli.Config.from_env",
-            return_value=Config(api_key="test", workspace=tmp_path),
+            "codehead.cli.load_runtime_config",
+            return_value=RuntimeConfig(api_key="test", workspace=tmp_path),
         ),
         patch("codehead.cli.build_agent_loop", return_value=loop),
         patch("codehead.cli.SQLiteSessionStore", return_value=store),
@@ -253,7 +255,7 @@ def test_main_treats_keyboard_interrupt_as_normal_exit() -> None:
 
 
 def test_startup_requires_ripgrep(tmp_path) -> None:
-    config = Config(api_key="test", workspace=tmp_path)
+    config = RuntimeConfig(api_key="test", workspace=tmp_path)
     with (
         patch(
             "codehead.cli.find_ripgrep",
@@ -262,6 +264,49 @@ def test_startup_requires_ripgrep(tmp_path) -> None:
         pytest.raises(ValueError, match="ripgrep"),
     ):
         build_agent_loop(config)
+
+
+def test_build_agent_loop_applies_runtime_step_limit(tmp_path):
+    class RepeatingProvider(LLMProvider):
+        calls = 0
+
+        async def stream(self, request):
+            self.calls += 1
+            yield LLMResponseCompleted(
+                response=LLMResponse(
+                    message=AssistantMessage(
+                        tool_calls=(
+                            ToolCall(
+                                id=f"call-{self.calls}",
+                                name="read",
+                                arguments={"path": "missing.txt"},
+                            ),
+                        )
+                    ),
+                    finish_reason=FinishReason.TOOL_CALLS,
+                )
+            )
+
+    provider = RepeatingProvider()
+    config = RuntimeConfig(workspace=tmp_path, api_key="test", max_steps=2)
+    with (
+        patch("codehead.cli.find_ripgrep", return_value="rg"),
+        patch("codehead.cli.OpenAIProvider", return_value=provider),
+    ):
+        loop = build_agent_loop(config)
+
+    async def run():
+        session = Session()
+        try:
+            with pytest.raises(AgentAbortedError, match="within 2 steps"):
+                await loop.run(session, "go")
+            assert provider.calls == 2
+            assert session.turn.status == "failed"
+        finally:
+            session.close()
+            await loop.aclose()
+
+    asyncio.run(run())
 
 
 @pytest.mark.parametrize("fatal", [False, True])
@@ -316,8 +361,8 @@ def test_database_startup_error_closes_provider(tmp_path):
     loop = Mock(aclose=AsyncMock())
     with (
         patch(
-            "codehead.cli.Config.from_env",
-            return_value=Config(api_key="test", workspace=tmp_path),
+            "codehead.cli.load_runtime_config",
+            return_value=RuntimeConfig(api_key="test", workspace=tmp_path),
         ),
         patch("codehead.cli.build_agent_loop", return_value=loop),
         patch(

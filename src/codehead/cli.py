@@ -14,7 +14,8 @@ from rich.text import Text
 
 from codehead.agent import Agent, AgentLoop
 from codehead.cancellation import settle
-from codehead.config import Config, LocalConfig
+from codehead.config import RuntimeConfig
+from codehead.config_loader import load_local_config, load_runtime_config
 from codehead.errors import CodeheadError, ResumeError, StorageError, ToolCleanupError
 from codehead.llm import OpenAIProvider
 from codehead.models import (
@@ -43,7 +44,7 @@ from codehead.tools import (
 from codehead.tools.search import find_ripgrep
 
 
-def build_agent_loop(config: Config) -> AgentLoop:
+def build_agent_loop(config: RuntimeConfig) -> AgentLoop:
     """Construct the v0.1 agent and its built-in tools."""
     rg_executable = find_ripgrep()
     tools = ToolRegistry(
@@ -71,7 +72,10 @@ def build_agent_loop(config: Config) -> AgentLoop:
         system_prompt=build_system_prompt(config.workspace),
     )
     return AgentLoop(
-        agent, context_budget=config.context_budget, permission_policy=policy
+        agent,
+        max_steps=config.max_steps,
+        context_budget=config.context_budget,
+        permission_policy=policy,
     )
 
 
@@ -289,7 +293,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
 
 def _list_sessions(console: Console) -> int:
     try:
-        config = LocalConfig.from_env()
+        config = load_local_config()
         if not config.session_db_path.exists():
             console.print("No sessions in this workspace.")
             return 0
@@ -325,7 +329,7 @@ async def _main(argv: list[str] | None = None) -> int:
     if args.list_sessions:
         return _list_sessions(console)
     try:
-        config = Config.from_env()
+        config = load_runtime_config()
         loop = build_agent_loop(config)
     except (CodeheadError, ValueError, TypeError) as exc:
         console.print(Text(f"Error: {exc}", style="bold red"))

@@ -4,6 +4,7 @@ import json
 import math
 from collections.abc import AsyncIterator
 
+from codehead.config import DEFAULT_CONTEXT_BUDGET
 from codehead.errors import ContextError, ModelError
 from codehead.llm.base import LLMProvider
 from codehead.models import (
@@ -77,7 +78,9 @@ def _units(records: tuple[MessageRecord, ...]) -> list[tuple[MessageRecord, ...]
 class ContextManager:
     """Prepare context before normal requests; never reload archived history."""
 
-    def __init__(self, provider: LLMProvider, budget: int = 32768) -> None:
+    def __init__(
+        self, provider: LLMProvider, budget: int = DEFAULT_CONTEXT_BUDGET
+    ) -> None:
         if budget < 1024:
             raise ValueError("context budget must be at least 1024")
         self._provider = provider

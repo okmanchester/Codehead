@@ -80,6 +80,7 @@ ADR 是**增量演进**的，不是一次性快照：
 | [0013](0013-sync-provider-path.md) | 同步、非流式的 Provider 调用路径 | Superseded by [0004](0004-async-streaming-commit-after-validation.md) | 2026-09-22 | `afa3983`、`d300282` |
 | [0014](0014-tool-permissions.md) | 工具调用权限与会话授权 | Accepted | 2026-09-24 | 工作区未提交变更；提交时补来源 |
 | [0015](0015-tool-system-v1-freeze.md) | 工具系统 v1 冻结：参数契约、文件提交与错误边界 | Accepted | 2026-09-24 | 工作区未提交变更；提交时补来源 |
+| [0016](0016-runtime-configuration.md) | 运行时配置值对象与项目 TOML 加载边界 | Accepted | 2026-09-28 | 工作区未提交变更；提交时补来源 |
 
 模板见 [template.md](template.md)。
 

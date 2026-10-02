@@ -11,7 +11,8 @@ from rich.console import Console
 
 from codehead.agent import Agent, AgentLoop
 from codehead.cli import _main, _parse_args, run_repl
-from codehead.config import Config, LocalConfig
+from codehead.config import RuntimeConfig
+from codehead.config_loader import load_local_config
 from codehead.errors import (
     AgentAbortedError,
     ContextError,
@@ -95,7 +96,7 @@ def tool_response():
 
 @pytest.fixture
 def setup(tmp_path):
-    config = Config(
+    config = RuntimeConfig(
         api_key="test",
         workspace=tmp_path,
         model="test-model",
@@ -383,7 +384,7 @@ def test_main_resume_uses_saved_prompt_current_model_and_waits_for_input(
         side_effect=["new question", "quit"] if continue_conversation else ["quit"]
     )
     with (
-        patch("codehead.cli.Config.from_env", return_value=config),
+        patch("codehead.cli.load_runtime_config", return_value=config),
         patch("codehead.cli.build_agent_loop", return_value=loop),
         patch("codehead.cli.build_system_prompt", return_value="current system"),
         patch("codehead.cli.Console", return_value=console),
@@ -418,7 +419,7 @@ def test_main_resume_of_empty_session_uses_current_system_on_first_input(setup):
     console = Console(file=StringIO())
     console.input = Mock(side_effect=["hello", "exit"])
     with (
-        patch("codehead.cli.Config.from_env", return_value=config),
+        patch("codehead.cli.load_runtime_config", return_value=config),
         patch(
             "codehead.cli.build_agent_loop",
             return_value=loop_for(provider, prompt="current"),
@@ -441,7 +442,7 @@ def test_main_invalid_resume_does_not_create_a_session_and_closes_resources(
     session.finish()
     provider = Provider()
     with (
-        patch("codehead.cli.Config.from_env", return_value=config),
+        patch("codehead.cli.load_runtime_config", return_value=config),
         patch("codehead.cli.build_agent_loop", return_value=loop_for(provider)),
         patch("codehead.cli.run_repl", side_effect=AssertionError("must not run")),
     ):
@@ -459,7 +460,7 @@ def test_default_start_creates_a_new_session_instead_of_resuming(setup):
     console = Console(file=StringIO())
     console.input = Mock(return_value="exit")
     with (
-        patch("codehead.cli.Config.from_env", return_value=config),
+        patch("codehead.cli.load_runtime_config", return_value=config),
         patch("codehead.cli.build_agent_loop", return_value=loop_for(provider)),
         patch("codehead.cli.Console", return_value=console),
     ):
@@ -476,10 +477,16 @@ def test_list_sessions_needs_no_credentials_tools_or_model_config(
 ):
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr("codehead.config_loader.load_dotenv", lambda: None)
     monkeypatch.setenv("CODEHEAD_WORKSPACE", str(tmp_path))
-    monkeypatch.setenv("CODEHEAD_SESSION_DB", "sessions.sqlite3")
+    monkeypatch.setenv("CODEHEAD_SESSION_DB", "")
     monkeypatch.setenv("CODEHEAD_CONTEXT_BUDGET", "invalid but irrelevant")
-    local = LocalConfig.from_env()
+    (tmp_path / ".codehead").mkdir()
+    (tmp_path / ".codehead" / "config.toml").write_text(
+        'session_db = "sessions.sqlite3"\ncontext_budget = "invalid"\nmax_steps = false',
+        encoding="utf-8",
+    )
+    local = load_local_config()
     session_id = None
     if has_archive:
         store = SQLiteSessionStore(local.session_db_path)
@@ -490,7 +497,7 @@ def test_list_sessions_needs_no_credentials_tools_or_model_config(
     output = StringIO()
     with (
         patch(
-            "codehead.cli.Config.from_env",
+            "codehead.cli.load_runtime_config",
             side_effect=AssertionError("model config not needed"),
         ),
         patch(
@@ -516,3 +523,59 @@ def test_resume_requires_id_and_excludes_list_mode(argv):
     with pytest.raises(SystemExit) as error:
         _parse_args(argv)
     assert error.value.code == 2
+
+
+def test_cli_resume_uses_current_project_configuration(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("codehead.config_loader.load_dotenv", lambda: None)
+    for name in (
+        "CODEHEAD_MODEL",
+        "DEEPSEEK_BASE_URL",
+        "CODEHEAD_SESSION_DB",
+        "CODEHEAD_CONTEXT_BUDGET",
+        "CODEHEAD_MAX_STEPS",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CODEHEAD_WORKSPACE", str(tmp_path))
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
+    database = tmp_path / ".codehead" / "sessions.sqlite3"
+    store = SQLiteSessionStore(database)
+    saved = Session(
+        store=store,
+        workspace=str(tmp_path),
+        model="old-model",
+        base_url="https://old.test",
+    )
+    turn = saved.begin_turn("first", "saved instructions")
+    saved.accept_response(turn, answer().message)
+    saved.finish()
+    store.close()
+    (tmp_path / ".codehead" / "config.toml").write_text(
+        'model = "new-model"\nbase_url = "https://new.test"\n'
+        "context_budget = 8192\nmax_steps = 3",
+        encoding="utf-8",
+    )
+    provider = Provider([answer("next answer")])
+    captured = []
+
+    def build(config):
+        captured.append(config)
+        return loop_for(provider, max_steps=config.max_steps)
+
+    async def repl(loop, *, console, session):
+        assert session.id == saved.id
+        assert session.model_changed
+        assert await loop.run(session, "next") == "next answer"
+        session.finish()
+        return 0
+
+    with (
+        patch("codehead.cli.build_agent_loop", side_effect=build),
+        patch("codehead.cli.run_repl", side_effect=repl),
+        patch("codehead.cli.Console", return_value=Console(file=StringIO())),
+    ):
+        assert asyncio.run(_main(["--resume", saved.id])) == 0
+    assert captured[0].model == "new-model"
+    assert captured[0].base_url == "https://new.test"
+    assert captured[0].context_budget == 8192
+    assert captured[0].max_steps == 3

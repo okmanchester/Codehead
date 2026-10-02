@@ -67,14 +67,55 @@ $env:DEEPSEEK_API_KEY = "your-api-key"
 codehead
 ```
 
-Codehead 默认使用 `deepseek-flash` 和 `https://api.deepseek.com`。可通过
-`CODEHEAD_MODEL`、`DEEPSEEK_BASE_URL` 和 `CODEHEAD_WORKSPACE` 覆盖默认值。
+Codehead 默认使用 `deepseek-flash` 和 `https://api.deepseek.com`。运行参数可通过
+项目 TOML 或环境变量配置，见下方「运行时配置」。
 
 当前 `read`、`write`、`edit`、`glob` 和 `grep` 工具只能访问 workspace 内的文件。
 `glob` 和 `grep` 依赖系统安装的 [ripgrep](https://github.com/BurntSushi/ripgrep)；
 启动时若找不到 `rg` 会明确报错。`bash` 默认以 workspace 为工作目录，可通过
 `workdir` 为单次调用指定 workspace 内的目录；它不提供进程沙箱。Windows 使用
 PowerShell，Unix 使用 Bash。
+
+## 运行时配置
+
+启动时先按现有方式加载 `.env`，再由 `CODEHEAD_WORKSPACE` 或当前目录确定 workspace，
+读取可选的 `workspace/.codehead/config.toml`。文件使用平铺字段，不包含 workspace
+或 API key；例如：
+
+```toml
+model = "deepseek-flash"
+base_url = "https://api.deepseek.com"
+session_db = ".codehead/sessions.sqlite3"
+context_budget = 32768
+max_steps = 20
+```
+
+| 字段 | 默认值 / 约束 | 环境覆盖 |
+| --- | --- | --- |
+| `model` | `deepseek-flash`，非空字符串 | `CODEHEAD_MODEL` |
+| `base_url` | `https://api.deepseek.com`，非空字符串 | `DEEPSEEK_BASE_URL` |
+| `session_db` | `.codehead/sessions.sqlite3`，相对路径以 workspace 为基准 | `CODEHEAD_SESSION_DB` |
+| `context_budget` | `32768`，整数且不小于 `1024` | `CODEHEAD_CONTEXT_BUDGET` |
+| `max_steps` | `20`，整数且不小于 `1`；每回合的正常模型调用上限 | `CODEHEAD_MAX_STEPS` |
+
+优先级为默认值 → TOML → `.env` → 进程环境；进程环境不会被 `.env` 覆盖，空环境变量
+视为未设置。合并后的参数在启动时统一校验，TOML 中的整数不得写成字符串或布尔值。
+文件不存在时使用默认值；未知字段、读取或解析错误会明确报错，不静默回退。
+密钥继续通过 `DEEPSEEK_API_KEY` 设置。配置在启动时固定，修改文件需重启。
+
+嵌入使用时，`LocalConfig` 和 `RuntimeConfig` 是不可变值对象，构造时不读取配置来源。
+原 `Config` 和 `from_env()` 已移除；使用独立加载函数：
+
+```python
+from codehead.config_loader import load_local_config, load_runtime_config
+
+config = load_runtime_config()  # 完整运行参数，要求 API key
+local = load_local_config()    # 仅路径配置，不要求 API key 或有效的模型参数
+```
+
+`--list-sessions` 使用本地路径加载器；它仍检查配置文件语法和未知字段，但不校验模型
+参数。初版只读取项目配置，不支持用户级配置、profiles、热重载或 `--config` 参数。
+权限继续由独立的 `permissions.toml` 管理，工具上限和模型思考开关保持现有行为。
 
 ## 工具权限
 

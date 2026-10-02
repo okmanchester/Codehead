@@ -8,6 +8,7 @@ from codehead.agent.agent import Agent
 from codehead.agent.cancellation import TurnControl
 from codehead.agent.context import ContextManager, observe_usage
 from codehead.cancellation import settle
+from codehead.config import DEFAULT_CONTEXT_BUDGET, DEFAULT_MAX_STEPS
 from codehead.errors import (
     AgentAbortedError,
     ModelError,
@@ -47,9 +48,9 @@ class AgentLoop:
     def __init__(
         self,
         agent: Agent,
-        max_steps: int = 20,
+        max_steps: int = DEFAULT_MAX_STEPS,
         *,
-        context_budget: int = 32768,
+        context_budget: int = DEFAULT_CONTEXT_BUDGET,
         permission_policy: PermissionPolicy,
         approve: Callable[[ToolCall], Awaitable[ApprovalChoice]] | None = None,
     ) -> None:
