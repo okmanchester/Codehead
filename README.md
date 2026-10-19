@@ -415,4 +415,30 @@ python -m scripts.swebench report --output docs/evaluation/swebench-lite-first-r
 独立评分，每次使用新 run_id，不重跑 Agent。评测边界与取舍见
 [ADR-0021](docs/adr/0021-swebench-evaluation-boundary.md)。
 
+### 评测产物保留与清理
+
+补丁、预测、完整事件与会话、usage、终态、attempt 标记、固定数据和配置、依赖版本、
+镜像身份、验收记录、官方评分日志及人工分析长期保留在本地，不纳入 Git。
+同一产物目录须顺序执行各命令，不支持并发验证、推理与清理。
+
+单题结果落盘并通过产物验收后，驱动自动删除该题导出的完整工作区 `changed.tar`。
+全部固定任务验收通过后，释放准备目录中的源码、环境归档和 Dockerfile，
+保留构建日志与环境成员清单。普通未修复、模型失败或步数耗尽，只要诊断证据和评分完整，
+仍按此规则清理；基础设施故障和产物验收失败保留现场。离线测试通过并保存日志与结果后，
+仅删除本次测试临时目录，失败目录保留。
+
+手动检查或处理已有产物：
+
+```powershell
+python -m scripts.swebench cleanup           # 只预览路径、理由和体积，不写文件
+python -m scripts.swebench cleanup --apply   # 执行同一保留策略
+```
+
+两条命令均支持 `--artifacts <目录>`，不读取密钥、不启动 Docker、不调用模型。
+清理只处理已识别且验收完整的产物，manifest 列出的文件保留；失败时报告残留，不改评分。
+完整基线释放后，运行时准备记录标记 `archives_released`。清理后仍可生成报告和
+重放已有预测的官方评分；需要新推理时须重新准备并验证，不会因清理删除 attempt 而重试。
+清理不做定时过期、压缩归档或 Docker 镜像回收。取舍见
+[ADR-0022](docs/adr/0022-swebench-artifact-retention.md)。
+
 首轮结果、环境修复和后续待办见 [精简评测报告](docs/evaluation/swebench-lite-first-run.md)。

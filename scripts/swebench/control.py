@@ -28,6 +28,7 @@ from scripts.swebench.patches import (
     extract_tree,
     initialize_baseline,
 )
+from scripts.swebench.retention import cleanup_after_run
 
 RESULTS = Path("/results")
 
@@ -548,12 +549,19 @@ def worker_settings(settings):
 
 
 def infer(client, row, settings, spent, output):
-    work = output / "work"
-    work.mkdir(parents=True)
     runtime = read_json(RESULTS / "runtime-validation.json")
     if not runtime["passed"]:
         raise RuntimeError("Task runtimes have not passed validation")
     prepared = runtime["instances"][row["instance_id"]]
+    if (
+        runtime.get("archives_released")
+        or not Path(prepared["source_archive"]).is_file()
+    ):
+        raise RuntimeError(
+            "Runtime archives released or missing; validate again before inference"
+        )
+    work = output / "work"
+    work.mkdir(parents=True)
     image = client.images.get(prepared["image"]["id"])
     task = {
         "problem_statement": row["problem_statement"],
@@ -691,6 +699,7 @@ def run(client, settings):
             spent += previous.get("usage", {}).get("estimated_cost_cny", 0)
             if previous.get("pipeline_failed"):
                 halted = previous.get("reason", "previous pipeline failure")
+            cleanup_after_run(RESULTS)
             continue
         output.mkdir(exist_ok=True)
         record = {
@@ -759,6 +768,7 @@ def run(client, settings):
                 )
         save_json(record_path, record)
         records.append(record)
+        cleanup_after_run(RESULTS)
     save_json(run_dir / "results.json", records)
     return {
         "records": records,

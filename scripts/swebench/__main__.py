@@ -1,4 +1,4 @@
-"""Windows host entry: python -m scripts.swebench {preflight,validate,run,report}."""
+"""Windows host entry: python -m scripts.swebench {preflight,validate,run,report,cleanup}."""
 
 import argparse
 import os
@@ -17,6 +17,7 @@ from scripts.swebench.common import (
     run_id,
     save_json,
 )
+from scripts.swebench.retention import cleanup, cleanup_offline
 
 
 def docker(*args, capture=False, **kwargs):
@@ -34,16 +35,18 @@ def docker(*args, capture=False, **kwargs):
 def offline(root):
     root.mkdir(parents=True, exist_ok=True)
     (root / "offline-tmp").mkdir(exist_ok=True)
+    temporary = root / "offline-tmp" / run_id("pytest")
     result = subprocess.run(
         [
             sys.executable,
             "-m",
             "pytest",
             "tests/test_swebench.py",
+            "tests/test_swebench_retention.py",
             "tests/test_openai_provider.py",
             "-q",
             "--tb=short",
-            f"--basetemp={root / 'offline-tmp' / run_id('pytest')}",
+            f"--basetemp={temporary}",
         ],
         cwd=ROOT,
         capture_output=True,
@@ -60,6 +63,8 @@ def offline(root):
     }
     save_json(root / "offline.json", outcome)
     print(result.stdout, end="")
+    if outcome["passed"]:
+        cleanup_offline(root, temporary)
     return outcome["passed"]
 
 
@@ -232,7 +237,9 @@ def report(root, destination=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["preflight", "validate", "run", "report"])
+    parser.add_argument(
+        "command", choices=["preflight", "validate", "run", "report", "cleanup"]
+    )
     parser.add_argument("--artifacts", type=Path, default=ARTIFACTS)
     parser.add_argument(
         "--build",
@@ -250,7 +257,30 @@ def main():
         help="Independently replay existing official predictions (validate)",
     )
     parser.add_argument("--output", type=Path, help="Report destination (report)")
+    parser.add_argument(
+        "--apply", action="store_true", help="Apply cleanup (preview by default)"
+    )
     args = parser.parse_args()
+    if args.apply and args.command != "cleanup":
+        parser.error("--apply is only valid for cleanup")
+    if args.command == "cleanup":
+        try:
+            outcome = cleanup(args.artifacts, apply=args.apply)
+            for item in outcome["candidates"]:
+                print(f"{item['path']} ({item['bytes']} bytes): {item['reason']}")
+            for message in outcome["retained"]:
+                print(f"Retained: {message}")
+            for message in outcome["errors"]:
+                print(f"Cleanup warning: {message}", file=sys.stderr)
+            files = outcome["removed"] if args.apply else outcome["candidates"]
+            print(
+                f"{'Removed' if args.apply else 'Would remove'} {len(files)} files, "
+                f"{sum(item['bytes'] for item in files)} bytes"
+            )
+            raise SystemExit(bool(outcome["errors"]))
+        except (OSError, ValueError, TypeError, AttributeError) as exc:
+            print(str(exc), file=sys.stderr)
+            raise SystemExit(1) from exc
     root = args.artifacts.resolve()
     root.mkdir(parents=True, exist_ok=True)
     status = 0
