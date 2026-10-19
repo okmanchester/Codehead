@@ -76,6 +76,9 @@ Codehead 默认使用 `deepseek-flash` 和 `https://api.deepseek.com`。运行�
 `workdir` 为单次调用指定 workspace 内的目录；它不提供进程沙箱。Windows 使用
 PowerShell，Unix 使用 Bash。
 
+新会话的系统提示包含 workspace、操作系统和工具实际使用的 Shell 入口：Windows 为
+`powershell.exe`，其他平台为 `/bin/bash`。根目录 `AGENTS.md` 的加载方式保持不变。
+
 ## 运行时配置
 
 启动时先按现有方式加载 `.env`，再由 `CODEHEAD_WORKSPACE` 或当前目录确定 workspace，
@@ -356,6 +359,9 @@ limit=100)` 使用区分大小写的逐行正则搜索并返回 `路径:行号:�
 `bash` 持续排空 stdout 和 stderr，各保留最多 20 KiB 的头尾片段，等待真实退出码或
 60 秒超时。`workdir` 只对本次调用生效，不会改变后续命令的默认目录。
 Windows 下的 PowerShell 会在退出前冲刷对象输出，并保留命令失败状态。
+多条语句默认不会遇错即停：先保留最后一个原生命令的非零 `$LASTEXITCODE`，再检查
+末条语句的 `$?`；原生命令返回 0 不会掩盖末条 cmdlet 的失败。因此前面语句报错、
+后面成功时仍可能返回 0，stderr 非空也不等于调用失败。
 Windows Shell 使用 Windows PowerShell，启动时移除子进程继承的 `PSModulePath`，
 由它重建默认模块路径，避免 PowerShell 7 的同名模块遮蔽系统模块。宿主自定义模块路径
 不会继承；需要时可在单次命令内显式导入模块。控制台输入、输出和原生命令管道编码

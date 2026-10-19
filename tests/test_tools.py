@@ -309,6 +309,27 @@ def test_windows_bash_preserves_cmdlet_and_native_failure_status(
         tool.execute({"command": 'python -c "import sys; sys.exit(3)"'})
 
 
+@pytest.mark.skipif(platform.system() != "Windows", reason="PowerShell exit status")
+@pytest.mark.parametrize("recover", [False, True])
+def test_windows_bash_native_success_does_not_hide_later_cmdlet_failure(
+    tmp_path: Path, recover: bool
+) -> None:
+    command = (
+        f"& '{sys.executable}' -c \"print('native-ok')\"; Write-Error 'cmdlet-error'"
+    )
+    tool = BashTool(tmp_path)
+    if recover:
+        output = tool.execute({"command": command + "; Write-Output 'recovered'"})
+        assert "Exit code: 0" in output
+        assert "recovered" in output
+    else:
+        with pytest.raises(ToolExecutionError, match="Exit code: 1") as caught:
+            tool.execute({"command": command})
+        output = str(caught.value)
+    assert "native-ok" in output
+    assert "cmdlet-error" in output
+
+
 @pytest.mark.skipif(platform.system() != "Windows", reason="PowerShell encoding")
 @pytest.mark.parametrize("exit_code", [0, 7])
 def test_windows_bash_preserves_chinese_stdout_stderr_and_exit_code(

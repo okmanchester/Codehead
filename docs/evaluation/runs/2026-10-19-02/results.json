@@ -1,0 +1,499 @@
+{
+  "run_id": "2026-10-19-02",
+  "date": "2026-10-19",
+  "previous_run": "2026-10-19-01",
+  "git_commit": "b52f45b132593f152d8ff38264ed9d9725dc3a6e",
+  "config": {
+    "model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "max_steps": 20,
+    "context_budget": 65536,
+    "disable_thinking": true
+  },
+  "python": "3.12.13",
+  "dependencies": {
+    "openai": "3.16.2",
+    "pydantic": "2.13.5",
+    "jsonschema": "4.26.0",
+    "rich": "15.0.0",
+    "python-dotenv": "1.2.3"
+  },
+  "preflight": {
+    "passed": true,
+    "synthetic_only": true,
+    "no_live_model_calls": true,
+    "checks": {
+      "initial/child_temp": {
+        "exit_code": 0,
+        "output": "3.12.13 | packaged by Anaconda, Inc. | (main, Mar 19 2026, 20:16:45) [MSC v.1942 64 bit (AMD64)]\r\nD:\\WorkSpace\\Projects\\codehead\\.pytest_tmp\\r2i\\t\r\n1\r\n",
+        "error": ""
+      },
+      "initial/pytest": {
+        "exit_code": 0,
+        "output": "..                                                                       [100%]\r\n2 passed, 61 deselected in 1.05s\r\n",
+        "error": ""
+      },
+      "resume/child_temp": {
+        "exit_code": 0,
+        "output": "3.12.13 | packaged by Anaconda, Inc. | (main, Mar 19 2026, 20:16:45) [MSC v.1942 64 bit (AMD64)]\r\nD:\\WorkSpace\\Projects\\codehead\\.pytest_tmp\\r2r\\t\r\n1\r\n",
+        "error": ""
+      },
+      "resume/pytest": {
+        "exit_code": 0,
+        "output": "..                                                                       [100%]\r\n2 passed, 61 deselected in 1.03s\r\n",
+        "error": ""
+      },
+      "smoke-initial": {
+        "exit_code": 0,
+        "reused_completed_synthetic_check": true
+      },
+      "smoke-resume": {
+        "exit_code": 0,
+        "output": "START smoke-resume (one phase only)\r\nEND smoke-resume exit=0; validation and next phase were not started\r\n",
+        "error": ""
+      },
+      "smoke-initial/lifecycle": {
+        "exit_code": 0
+      },
+      "smoke-resume/lifecycle": {
+        "exit_code": 0
+      }
+    }
+  },
+  "fixture_source_hashes": {
+    "src/codehead/__init__.py": "29c8897ae91ff99902547cab649b80d7f55c011823a5f58ed082ea8ab68ac8f2",
+    "src/codehead/agent/__init__.py": "3364dbcbea18a6722dbf3f7c8a97a1ccd57e2f42413a919e50d04ad64d9a907d",
+    "src/codehead/agent/agent.py": "b8c3d156dd458683475f52125a2bfdda43be4daa34d26b14ac903c18c6979e32",
+    "src/codehead/agent/cancellation.py": "d9ecf24f32db04b035978e6d841785e2a91a07483db444d2d8c79330bbf67697",
+    "src/codehead/agent/context.py": "4ad37ec1323def2eee4ae26a588f8cf2f1cb62c5cf664be41dd0e429b9725345",
+    "src/codehead/agent/loop.py": "fff74183ab1ec54db0531412c9f5c44a2aeb44a377d89251dc7ce836e6c8de30",
+    "src/codehead/cancellation.py": "eded4c3d6b4dc7b293834e6ebe4b741edeb6ba4e2e76b7cf5fba006f52974e26",
+    "src/codehead/cli.py": "4cea4e2f2c4df70a488a2b61ecb619edbc558fe9e93b1fa9f91332d837cb001a",
+    "src/codehead/config.py": "1bb50cc886fa7fb490663c72c3d4027d7c510486aed367215d71cbb74bb9b40d",
+    "src/codehead/config_loader.py": "b28ee085f4b7e770ade3462b6296c7d68351eae42f687cdb08eb543e68379212",
+    "src/codehead/errors.py": "c8d9a3339e0c35f5fbb28e0a9ecb73beeccad17bc20f67ed3c254da4ea6a4844",
+    "src/codehead/llm/__init__.py": "fbf2b26e8164683c7109342bab207b95b62a2b836c5c267353ec5547cfaf34fa",
+    "src/codehead/llm/base.py": "16d180e4b6b5a439a91486c6b3f13ed9c087c6c776e6475908952551ca16168f",
+    "src/codehead/llm/openai.py": "8c642cea3c625e1a3d49ef8a5876c6f5712ec65aa66411b9637fcde66f00e969",
+    "src/codehead/models/__init__.py": "294cd7c7c9b3e5146f389ba280d02a5d16b4283b301e388cb9d9a08cb95298b9",
+    "src/codehead/models/_base.py": "d70f0c925838e1524c7a736d3a27e57c5aba2a578857aa570ab92e3a0c7b479b",
+    "src/codehead/models/event.py": "eeaa46afa15ec8d39f5da8cd0c6a1b4608103f2b7f74117df8540d38b1a71481",
+    "src/codehead/models/llm.py": "42465f43cf9458970b7f468bbd51f0ba7ecb49a3a7f4928d6e98c53efaac5a67",
+    "src/codehead/models/message.py": "02cda0907740ae05f683fbfc5c07555a607de1913d6a4b7f9fc0ec90ad1ba191",
+    "src/codehead/models/tool.py": "1d35b4b4b28e92f35d74bc1c8d18886e3b5107c1c62d44ced05b9ab577be0e21",
+    "src/codehead/permissions.py": "be14af0e385a317eb38f7aeff4987c5e964fc2a6b163762d41f6180985b3ddb7",
+    "src/codehead/prompt/__init__.py": "7d71c800944c8cb5db5456bb24ab16e5f0058c9b2d691af6af54898ed4c383af",
+    "src/codehead/prompt/system.py": "94f931f38fc899d9af7fa7e82155057d0b738c7edac108e0dfe35f6f0d0555ca",
+    "src/codehead/session/__init__.py": "92c9bdfc6ba057e48659aa67a50d7df9c1730b26e6773b6550317ce9eace7ea8",
+    "src/codehead/session/history.py": "483985a6a4ebac353098ce1211623b2c1d8324efa193fa576a65a49226bfdf00",
+    "src/codehead/session/session.py": "97f445249b2bef4dc77ec326c2ee53b47bbf042b28a0648a3deae066a96635ed",
+    "src/codehead/session/store.py": "dd3769c943bea59b618a6333320b032e77e9ac24ec253cf159bb20c57c52369f",
+    "src/codehead/tools/__init__.py": "0ab03ef21ce4bda5b47a5dad38b5546a5ca301293efd9b389c71b9ff5d518242",
+    "src/codehead/tools/_atomic.py": "0a330b9b28fbd1e0e6e06442034d66d0c4debf03ec3316b76d9f6401c2f38877",
+    "src/codehead/tools/_process_launcher.py": "0d66190c3a4b46cf883a82a43b628cfc5682d0ec9fc90a4e4bc06e9c1c8325a5",
+    "src/codehead/tools/_windows_job.py": "1cd1ae8c4121b60eab934a8f9a31312476b934f997d73acd4567f8fd870ffcf7",
+    "src/codehead/tools/base.py": "56667f89c93c1dc39b169a8ce4a034993267d45f2a47b58c77dd0bce4d854a58",
+    "src/codehead/tools/bash.py": "135025476c4c861055d0bda4feaf363f78a12098abb68d9f01f4783cfa9d1227",
+    "src/codehead/tools/edit.py": "290f7c6aabf365fb6d60588e73ddac362ed77d2ed09ceeddb5b8c959e005aa09",
+    "src/codehead/tools/output.py": "3c1d65f10cf134d3db506d3d168716838ce08e89be556dbca0fd345550e95ed1",
+    "src/codehead/tools/process.py": "46db1d21c96f4183fd71d628ef08d3c1210e080c7e8a70d3e15349ca35875f7f",
+    "src/codehead/tools/read.py": "1da1c7586ba67bba5a636e8ca139b29732c4a384cb6922c1c2810817e67555d2",
+    "src/codehead/tools/registry.py": "1c398a5d28392d588485715520ce206336d2973c20f454d764c70f5b695fbdea",
+    "src/codehead/tools/runtime.py": "6872cb6f167c08a8c77e27cd70af5698b37475085d3a928b26d464e780a4de19",
+    "src/codehead/tools/search.py": "f1aafb077e4825ad8dc05f4d9fa10460886fcaadf563bf7372ce244d0ff59002",
+    "src/codehead/tools/write.py": "a7ce8e4c4db019069bc0337599b836c819f5aadacf5cc58ab39a22e7d9ad9059"
+  },
+  "driver_hashes": {
+    "pyproject.toml": "b494e1c31da24499fab73175cbc8a67aee91319b557bc4b5a6401cbe01ede042",
+    "src/codehead/__init__.py": "29c8897ae91ff99902547cab649b80d7f55c011823a5f58ed082ea8ab68ac8f2",
+    "src/codehead/agent/__init__.py": "3364dbcbea18a6722dbf3f7c8a97a1ccd57e2f42413a919e50d04ad64d9a907d",
+    "src/codehead/agent/agent.py": "b8c3d156dd458683475f52125a2bfdda43be4daa34d26b14ac903c18c6979e32",
+    "src/codehead/agent/cancellation.py": "d9ecf24f32db04b035978e6d841785e2a91a07483db444d2d8c79330bbf67697",
+    "src/codehead/agent/context.py": "4ad37ec1323def2eee4ae26a588f8cf2f1cb62c5cf664be41dd0e429b9725345",
+    "src/codehead/agent/loop.py": "fff74183ab1ec54db0531412c9f5c44a2aeb44a377d89251dc7ce836e6c8de30",
+    "src/codehead/cancellation.py": "eded4c3d6b4dc7b293834e6ebe4b741edeb6ba4e2e76b7cf5fba006f52974e26",
+    "src/codehead/cli.py": "4cea4e2f2c4df70a488a2b61ecb619edbc558fe9e93b1fa9f91332d837cb001a",
+    "src/codehead/config.py": "1bb50cc886fa7fb490663c72c3d4027d7c510486aed367215d71cbb74bb9b40d",
+    "src/codehead/config_loader.py": "b28ee085f4b7e770ade3462b6296c7d68351eae42f687cdb08eb543e68379212",
+    "src/codehead/errors.py": "c8d9a3339e0c35f5fbb28e0a9ecb73beeccad17bc20f67ed3c254da4ea6a4844",
+    "src/codehead/llm/__init__.py": "fbf2b26e8164683c7109342bab207b95b62a2b836c5c267353ec5547cfaf34fa",
+    "src/codehead/llm/base.py": "16d180e4b6b5a439a91486c6b3f13ed9c087c6c776e6475908952551ca16168f",
+    "src/codehead/llm/openai.py": "8c642cea3c625e1a3d49ef8a5876c6f5712ec65aa66411b9637fcde66f00e969",
+    "src/codehead/models/__init__.py": "294cd7c7c9b3e5146f389ba280d02a5d16b4283b301e388cb9d9a08cb95298b9",
+    "src/codehead/models/_base.py": "d70f0c925838e1524c7a736d3a27e57c5aba2a578857aa570ab92e3a0c7b479b",
+    "src/codehead/models/event.py": "eeaa46afa15ec8d39f5da8cd0c6a1b4608103f2b7f74117df8540d38b1a71481",
+    "src/codehead/models/llm.py": "42465f43cf9458970b7f468bbd51f0ba7ecb49a3a7f4928d6e98c53efaac5a67",
+    "src/codehead/models/message.py": "02cda0907740ae05f683fbfc5c07555a607de1913d6a4b7f9fc0ec90ad1ba191",
+    "src/codehead/models/tool.py": "1d35b4b4b28e92f35d74bc1c8d18886e3b5107c1c62d44ced05b9ab577be0e21",
+    "src/codehead/permissions.py": "be14af0e385a317eb38f7aeff4987c5e964fc2a6b163762d41f6180985b3ddb7",
+    "src/codehead/prompt/__init__.py": "7d71c800944c8cb5db5456bb24ab16e5f0058c9b2d691af6af54898ed4c383af",
+    "src/codehead/prompt/system.py": "17bd83f76ac2c3b70508cf4bc5a275fef18f3864b42f9690f554ffeb0c7d204c",
+    "src/codehead/session/__init__.py": "92c9bdfc6ba057e48659aa67a50d7df9c1730b26e6773b6550317ce9eace7ea8",
+    "src/codehead/session/history.py": "483985a6a4ebac353098ce1211623b2c1d8324efa193fa576a65a49226bfdf00",
+    "src/codehead/session/session.py": "97f445249b2bef4dc77ec326c2ee53b47bbf042b28a0648a3deae066a96635ed",
+    "src/codehead/session/store.py": "dd3769c943bea59b618a6333320b032e77e9ac24ec253cf159bb20c57c52369f",
+    "src/codehead/tools/__init__.py": "0ab03ef21ce4bda5b47a5dad38b5546a5ca301293efd9b389c71b9ff5d518242",
+    "src/codehead/tools/_atomic.py": "0a330b9b28fbd1e0e6e06442034d66d0c4debf03ec3316b76d9f6401c2f38877",
+    "src/codehead/tools/_process_launcher.py": "0d66190c3a4b46cf883a82a43b628cfc5682d0ec9fc90a4e4bc06e9c1c8325a5",
+    "src/codehead/tools/_windows_job.py": "1cd1ae8c4121b60eab934a8f9a31312476b934f997d73acd4567f8fd870ffcf7",
+    "src/codehead/tools/base.py": "56667f89c93c1dc39b169a8ce4a034993267d45f2a47b58c77dd0bce4d854a58",
+    "src/codehead/tools/bash.py": "135025476c4c861055d0bda4feaf363f78a12098abb68d9f01f4783cfa9d1227",
+    "src/codehead/tools/edit.py": "290f7c6aabf365fb6d60588e73ddac362ed77d2ed09ceeddb5b8c959e005aa09",
+    "src/codehead/tools/output.py": "3c1d65f10cf134d3db506d3d168716838ce08e89be556dbca0fd345550e95ed1",
+    "src/codehead/tools/process.py": "46db1d21c96f4183fd71d628ef08d3c1210e080c7e8a70d3e15349ca35875f7f",
+    "src/codehead/tools/read.py": "1da1c7586ba67bba5a636e8ca139b29732c4a384cb6922c1c2810817e67555d2",
+    "src/codehead/tools/registry.py": "1c398a5d28392d588485715520ce206336d2973c20f454d764c70f5b695fbdea",
+    "src/codehead/tools/runtime.py": "6872cb6f167c08a8c77e27cd70af5698b37475085d3a928b26d464e780a4de19",
+    "src/codehead/tools/search.py": "f1aafb077e4825ad8dc05f4d9fa10460886fcaadf563bf7372ce244d0ff59002",
+    "src/codehead/tools/write.py": "a7ce8e4c4db019069bc0337599b836c819f5aadacf5cc58ab39a22e7d9ad9059"
+  },
+  "main_source_after": {
+    "src/codehead/__init__.py": "29c8897ae91ff99902547cab649b80d7f55c011823a5f58ed082ea8ab68ac8f2",
+    "src/codehead/agent/__init__.py": "3364dbcbea18a6722dbf3f7c8a97a1ccd57e2f42413a919e50d04ad64d9a907d",
+    "src/codehead/agent/agent.py": "b8c3d156dd458683475f52125a2bfdda43be4daa34d26b14ac903c18c6979e32",
+    "src/codehead/agent/cancellation.py": "d9ecf24f32db04b035978e6d841785e2a91a07483db444d2d8c79330bbf67697",
+    "src/codehead/agent/context.py": "4ad37ec1323def2eee4ae26a588f8cf2f1cb62c5cf664be41dd0e429b9725345",
+    "src/codehead/agent/loop.py": "fff74183ab1ec54db0531412c9f5c44a2aeb44a377d89251dc7ce836e6c8de30",
+    "src/codehead/cancellation.py": "eded4c3d6b4dc7b293834e6ebe4b741edeb6ba4e2e76b7cf5fba006f52974e26",
+    "src/codehead/cli.py": "4cea4e2f2c4df70a488a2b61ecb619edbc558fe9e93b1fa9f91332d837cb001a",
+    "src/codehead/config.py": "1bb50cc886fa7fb490663c72c3d4027d7c510486aed367215d71cbb74bb9b40d",
+    "src/codehead/config_loader.py": "b28ee085f4b7e770ade3462b6296c7d68351eae42f687cdb08eb543e68379212",
+    "src/codehead/errors.py": "c8d9a3339e0c35f5fbb28e0a9ecb73beeccad17bc20f67ed3c254da4ea6a4844",
+    "src/codehead/llm/__init__.py": "fbf2b26e8164683c7109342bab207b95b62a2b836c5c267353ec5547cfaf34fa",
+    "src/codehead/llm/base.py": "16d180e4b6b5a439a91486c6b3f13ed9c087c6c776e6475908952551ca16168f",
+    "src/codehead/llm/openai.py": "8c642cea3c625e1a3d49ef8a5876c6f5712ec65aa66411b9637fcde66f00e969",
+    "src/codehead/models/__init__.py": "294cd7c7c9b3e5146f389ba280d02a5d16b4283b301e388cb9d9a08cb95298b9",
+    "src/codehead/models/_base.py": "d70f0c925838e1524c7a736d3a27e57c5aba2a578857aa570ab92e3a0c7b479b",
+    "src/codehead/models/event.py": "eeaa46afa15ec8d39f5da8cd0c6a1b4608103f2b7f74117df8540d38b1a71481",
+    "src/codehead/models/llm.py": "42465f43cf9458970b7f468bbd51f0ba7ecb49a3a7f4928d6e98c53efaac5a67",
+    "src/codehead/models/message.py": "02cda0907740ae05f683fbfc5c07555a607de1913d6a4b7f9fc0ec90ad1ba191",
+    "src/codehead/models/tool.py": "1d35b4b4b28e92f35d74bc1c8d18886e3b5107c1c62d44ced05b9ab577be0e21",
+    "src/codehead/permissions.py": "be14af0e385a317eb38f7aeff4987c5e964fc2a6b163762d41f6180985b3ddb7",
+    "src/codehead/prompt/__init__.py": "7d71c800944c8cb5db5456bb24ab16e5f0058c9b2d691af6af54898ed4c383af",
+    "src/codehead/prompt/system.py": "17bd83f76ac2c3b70508cf4bc5a275fef18f3864b42f9690f554ffeb0c7d204c",
+    "src/codehead/session/__init__.py": "92c9bdfc6ba057e48659aa67a50d7df9c1730b26e6773b6550317ce9eace7ea8",
+    "src/codehead/session/history.py": "483985a6a4ebac353098ce1211623b2c1d8324efa193fa576a65a49226bfdf00",
+    "src/codehead/session/session.py": "97f445249b2bef4dc77ec326c2ee53b47bbf042b28a0648a3deae066a96635ed",
+    "src/codehead/session/store.py": "dd3769c943bea59b618a6333320b032e77e9ac24ec253cf159bb20c57c52369f",
+    "src/codehead/tools/__init__.py": "0ab03ef21ce4bda5b47a5dad38b5546a5ca301293efd9b389c71b9ff5d518242",
+    "src/codehead/tools/_atomic.py": "0a330b9b28fbd1e0e6e06442034d66d0c4debf03ec3316b76d9f6401c2f38877",
+    "src/codehead/tools/_process_launcher.py": "0d66190c3a4b46cf883a82a43b628cfc5682d0ec9fc90a4e4bc06e9c1c8325a5",
+    "src/codehead/tools/_windows_job.py": "1cd1ae8c4121b60eab934a8f9a31312476b934f997d73acd4567f8fd870ffcf7",
+    "src/codehead/tools/base.py": "56667f89c93c1dc39b169a8ce4a034993267d45f2a47b58c77dd0bce4d854a58",
+    "src/codehead/tools/bash.py": "36c7ee53fe65a3fddbff6b429d2bb02223a88bd3dfac1e0060186ac63305efbc",
+    "src/codehead/tools/edit.py": "290f7c6aabf365fb6d60588e73ddac362ed77d2ed09ceeddb5b8c959e005aa09",
+    "src/codehead/tools/output.py": "3c1d65f10cf134d3db506d3d168716838ce08e89be556dbca0fd345550e95ed1",
+    "src/codehead/tools/process.py": "46db1d21c96f4183fd71d628ef08d3c1210e080c7e8a70d3e15349ca35875f7f",
+    "src/codehead/tools/read.py": "1da1c7586ba67bba5a636e8ca139b29732c4a384cb6922c1c2810817e67555d2",
+    "src/codehead/tools/registry.py": "1c398a5d28392d588485715520ce206336d2973c20f454d764c70f5b695fbdea",
+    "src/codehead/tools/runtime.py": "6872cb6f167c08a8c77e27cd70af5698b37475085d3a928b26d464e780a4de19",
+    "src/codehead/tools/search.py": "f1aafb077e4825ad8dc05f4d9fa10460886fcaadf563bf7372ce244d0ff59002",
+    "src/codehead/tools/write.py": "a7ce8e4c4db019069bc0337599b836c819f5aadacf5cc58ab39a22e7d9ad9059"
+  },
+  "stages": [
+    {
+      "mode": "initial",
+      "execution": {
+        "mode": "initial",
+        "exit_code": 0,
+        "wall_time_s": 78.609,
+        "prompt_sent": true,
+        "exit_sent_after_turn": true,
+        "phase_only": true
+      },
+      "session_id": "1169d179968a4793988e84973c277f9e",
+      "session_status": "closed",
+      "turn_status": "failed",
+      "normal_requests": 20,
+      "summary_requests": 0,
+      "input_tokens": 362573,
+      "output_tokens": 4123,
+      "requests_without_usage": 0,
+      "tool_failed": 1,
+      "final_answer": false,
+      "turn_failures": [
+        {
+          "turn_id": "e0e86ce57fc5400ca801ec44ce450431",
+          "type": "turn.failed",
+          "reason": "Agent did not produce a final answer within 20 steps"
+        }
+      ],
+      "input_barrier": {
+        "waited_s": 0.5,
+        "no_model_or_tool_before_input": true,
+        "session_id": "1169d179968a4793988e84973c277f9e"
+      },
+      "changed_files": [
+        "README.md",
+        "src/codehead/prompt/system.py",
+        "src/codehead/tools/bash.py",
+        "tests/test_system_prompt.py",
+        "tests/test_tools.py"
+      ],
+      "independent_validation": {
+        "passed": false,
+        "checks": {
+          "final_answer": false,
+          "normal_exit": true,
+          "all_checks_pass": true,
+          "functional_acceptance": true,
+          "original_tests_preserved": false,
+          "regression_tests_added": true,
+          "readme_updated": true,
+          "agents_unchanged": true,
+          "input_barrier": true
+        },
+        "new_tests": [
+          "tests/test_system_prompt.py:test_system_prompt_appends_root_agents_instructions_after_shell",
+          "tests/test_system_prompt.py:test_system_prompt_omits_empty_agents_instructions",
+          "tests/test_system_prompt.py:test_system_prompt_reports_detected_operating_system_and_shell",
+          "tests/test_system_prompt.py:test_system_prompt_shell_ignores_shell_environment_variables",
+          "tests/test_system_prompt.py:test_system_prompt_shell_matches_bash_tool_executable",
+          "tests/test_tools.py:test_bash_shell_ignores_shell_environment_variables"
+        ],
+        "verification_exit_codes": {
+          "probe": 0,
+          "related": 0,
+          "full": 0,
+          "lint": 0,
+          "format": 0
+        },
+        "functional_acceptance_passed": true
+      },
+      "manual_review": {
+        "original_tests_not_weakened": true,
+        "modified_existing_tests": [
+          "tests/test_tools.py:test_bash_selects_platform_shell_and_removes_api_key"
+        ],
+        "reason": "Only existing test change appends a Darwin parameter case; body, original cases, assertions and other decorators are unchanged.",
+        "implementation_concern": "Candidate makes low-level shell execution depend on prompt.system.shell_executable; unnecessary coupling for this small task. Keep the specimen isolated; do not port this refactor.",
+        "functional_acceptance": true,
+        "strict_task_passed": false,
+        "strict_failure": "20-step exhaustion without final answer"
+      }
+    },
+    {
+      "mode": "resume",
+      "execution": {
+        "mode": "resume",
+        "exit_code": 0,
+        "wall_time_s": 103.641,
+        "prompt_sent": true,
+        "exit_sent_after_turn": true,
+        "phase_only": true
+      },
+      "session_id": "1169d179968a4793988e84973c277f9e",
+      "session_status": "closed",
+      "turn_status": "failed",
+      "normal_requests": 20,
+      "summary_requests": 1,
+      "input_tokens": 460510,
+      "output_tokens": 5491,
+      "requests_without_usage": 0,
+      "tool_failed": 1,
+      "final_answer": false,
+      "turn_failures": [
+        {
+          "turn_id": "a5dbc6c8345443dcafb7c9bd5fd645c5",
+          "type": "turn.failed",
+          "reason": "Agent did not produce a final answer within 20 steps"
+        }
+      ],
+      "input_barrier": {
+        "waited_s": 0.5,
+        "no_model_or_tool_before_input": true,
+        "session_id": "1169d179968a4793988e84973c277f9e"
+      },
+      "changed_files": [
+        "README.md",
+        "src/codehead/prompt/system.py",
+        "tests/test_system_prompt.py"
+      ],
+      "independent_validation": {
+        "passed": false,
+        "checks": {
+          "final_answer": false,
+          "normal_exit": true,
+          "all_checks_pass": true,
+          "functional_acceptance": true,
+          "original_tests_preserved": false,
+          "regression_tests_added": true,
+          "readme_updated": true,
+          "agents_unchanged": true,
+          "input_barrier": true,
+          "same_session": true,
+          "old_messages_unchanged": true,
+          "sequences_contiguous": true,
+          "one_new_turn": true,
+          "system_prompt_preserved": true,
+          "prior_tools_unchanged": true
+        },
+        "new_tests": [
+          "tests/test_system_prompt.py:test_system_prompt_agents_instructions_follow_python_line",
+          "tests/test_system_prompt.py:test_system_prompt_python_executable_is_absolute",
+          "tests/test_system_prompt.py:test_system_prompt_python_ignores_environment_variables",
+          "tests/test_system_prompt.py:test_system_prompt_reports_running_python"
+        ],
+        "verification_exit_codes": {
+          "probe": 0,
+          "related": 0,
+          "full": 0,
+          "lint": 0,
+          "format": 0
+        },
+        "functional_acceptance_passed": true
+      },
+      "manual_review": {
+        "original_tests_not_weakened": true,
+        "modified_existing_tests": [
+          "tests/test_system_prompt.py:test_system_prompt_reports_detected_operating_system_and_shell"
+        ],
+        "reason": "Only existing test change adds the Python-line assertion; removing that assertion restores the exact prior test AST. Existing assertions, cases, function arguments and decorators remain.",
+        "lifecycle_passed": true,
+        "functional_acceptance": true,
+        "task_passed": false,
+        "strict_failure": "20-step exhaustion without final answer",
+        "model_error": "At step 4 an edit payload inserted prose and DSML fragments into the Python test; later corrected after parse failure. No evaluator edit to specimen."
+      }
+    }
+  ],
+  "resume_scenario_decision": {
+    "status": "completed",
+    "scenario": "closed_failed_turn_followup",
+    "user_authorized": true,
+    "user_reply": "继续验证失败回合的恢复续改",
+    "initial_task_status": "failed_step_limit_without_final_answer",
+    "initial_functional_acceptance": "passed",
+    "initial_process_status": "normally_exited_closed_session",
+    "additional_model_turns": 1,
+    "max_steps": 20,
+    "does_not_replace_original_successful_first_turn_scenario": true,
+    "model_turns_executed": 1,
+    "resume_lifecycle_passed": true,
+    "followup_functional_acceptance_passed": true,
+    "followup_task_completed": false,
+    "followup_failure": "20-step exhaustion without final answer"
+  },
+  "shell_probe_before": {
+    "stdout": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "stderr_only": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "cmdlet_last": {
+      "tool_exit": 1,
+      "direct_exit": 1
+    },
+    "cmdlet_then_success": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "runtime_then_success": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "caught_error": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "explicit_stop": {
+      "tool_exit": 1,
+      "direct_exit": 1
+    },
+    "native_failure": {
+      "tool_exit": 3,
+      "direct_exit": 1
+    },
+    "native_failure_then_output": {
+      "tool_exit": 3,
+      "direct_exit": 0
+    },
+    "native_failure_then_native_success": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "native_success_then_cmdlet_error": {
+      "tool_exit": 0,
+      "direct_exit": 1
+    },
+    "native_success_then_cmdlet_error_then_success": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    }
+  },
+  "shell_probe_after": {
+    "stdout": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "stderr_only": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "cmdlet_last": {
+      "tool_exit": 1,
+      "direct_exit": 1
+    },
+    "cmdlet_then_success": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "runtime_then_success": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "caught_error": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "explicit_stop": {
+      "tool_exit": 1,
+      "direct_exit": 1
+    },
+    "native_failure": {
+      "tool_exit": 3,
+      "direct_exit": 1
+    },
+    "native_failure_then_output": {
+      "tool_exit": 3,
+      "direct_exit": 0
+    },
+    "native_failure_then_native_success": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    },
+    "native_success_then_cmdlet_error": {
+      "tool_exit": 1,
+      "direct_exit": 1
+    },
+    "native_success_then_cmdlet_error_then_success": {
+      "tool_exit": 0,
+      "direct_exit": 0
+    }
+  },
+  "replay_environment_probe": {
+    "direct_old": {
+      "hash_passed": false,
+      "output": "Exit code: 1\nstderr:\nGet-FileHash : ��ģ�顰Microsoft.PowerShell.Utility�����ҵ���Get-FileHash��������޷����ظ�ģ�顣�й���ϸ��Ϣ�������С�Impo\r\nrt-Module Microsoft.PowerShell.Utility����\r\n����λ�� ��:1 �ַ�: 5\r\n+ & { Get-FileHash -LiteralPath data.txt -Algorithm SHA256 | Select-Obj ...\r\n+     ~~~~~~~~~~~~\r\n    + CategoryInfo          : ObjectNotFound: (Get-FileHash:String) [], CommandNotFoundException\r\n    + FullyQualifiedErrorId : CouldNotAutoloadMatchingModule"
+    },
+    "old_via_fixed_harness": {
+      "hash_passed": true,
+      "output": "Exit code: 0\nstdout:\nC95B4AC808D38E2AE60A4EA4EEA13C27C8EC86373806A4394FBF697A43088329"
+    },
+    "trigger_masked_by_outer_harness": true,
+    "explanation": "The fixed driver removes PSModulePath before launching the model shell. The old tool then inherits a clean Windows PowerShell environment. A direct evaluator probe can fail while the model path succeeds."
+  },
+  "main_verification": {
+    "related": "89 passed, 1 skipped",
+    "full": "412 passed, 1 skipped",
+    "ruff_lint_passed": true,
+    "ruff_source_format_passed": true,
+    "diff_check_passed": true
+  },
+  "local_error_notes": [
+    "First synthetic restore preflight exposed an unbound local variable in the one-off evaluator; fixed before any live request. Original failure preserved."
+  ]
+}

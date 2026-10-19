@@ -1,0 +1,711 @@
+{
+  "run_id": "2026-10-19-01",
+  "date": "2026-10-19",
+  "codehead_commit": "b52f45b132593f152d8ff38264ed9d9725dc3a6e",
+  "config": {
+    "model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "disable_thinking": true,
+    "context_budget": 65536,
+    "max_steps": 20,
+    "python": "3.12.13",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "executable": "D:\\miniconda3\\envs\\codehead\\python.exe",
+    "dependencies": {
+      "openai": "3.16.2",
+      "pydantic": "2.13.5",
+      "jsonschema": "4.26.0",
+      "rich": "15.0.0",
+      "python-dotenv": "1.2.3"
+    }
+  },
+  "execution_order": [
+    "008-A-1",
+    "008-B-1",
+    "008-B-2",
+    "008-A-2",
+    "008-A-3",
+    "008-B-3",
+    "011-B-1",
+    "012-B-1",
+    "012-resume-B-1"
+  ],
+  "source_changed_files": [
+    "src/codehead/prompt/system.py"
+  ],
+  "source_a_sha256": {
+    "src/codehead/__init__.py": "29c8897ae91ff99902547cab649b80d7f55c011823a5f58ed082ea8ab68ac8f2",
+    "src/codehead/agent/__init__.py": "3364dbcbea18a6722dbf3f7c8a97a1ccd57e2f42413a919e50d04ad64d9a907d",
+    "src/codehead/agent/agent.py": "b8c3d156dd458683475f52125a2bfdda43be4daa34d26b14ac903c18c6979e32",
+    "src/codehead/agent/cancellation.py": "d9ecf24f32db04b035978e6d841785e2a91a07483db444d2d8c79330bbf67697",
+    "src/codehead/agent/context.py": "4ad37ec1323def2eee4ae26a588f8cf2f1cb62c5cf664be41dd0e429b9725345",
+    "src/codehead/agent/loop.py": "fff74183ab1ec54db0531412c9f5c44a2aeb44a377d89251dc7ce836e6c8de30",
+    "src/codehead/cancellation.py": "eded4c3d6b4dc7b293834e6ebe4b741edeb6ba4e2e76b7cf5fba006f52974e26",
+    "src/codehead/cli.py": "4cea4e2f2c4df70a488a2b61ecb619edbc558fe9e93b1fa9f91332d837cb001a",
+    "src/codehead/config.py": "1bb50cc886fa7fb490663c72c3d4027d7c510486aed367215d71cbb74bb9b40d",
+    "src/codehead/config_loader.py": "b28ee085f4b7e770ade3462b6296c7d68351eae42f687cdb08eb543e68379212",
+    "src/codehead/errors.py": "c8d9a3339e0c35f5fbb28e0a9ecb73beeccad17bc20f67ed3c254da4ea6a4844",
+    "src/codehead/llm/__init__.py": "fbf2b26e8164683c7109342bab207b95b62a2b836c5c267353ec5547cfaf34fa",
+    "src/codehead/llm/base.py": "16d180e4b6b5a439a91486c6b3f13ed9c087c6c776e6475908952551ca16168f",
+    "src/codehead/llm/openai.py": "8c642cea3c625e1a3d49ef8a5876c6f5712ec65aa66411b9637fcde66f00e969",
+    "src/codehead/models/__init__.py": "294cd7c7c9b3e5146f389ba280d02a5d16b4283b301e388cb9d9a08cb95298b9",
+    "src/codehead/models/_base.py": "d70f0c925838e1524c7a736d3a27e57c5aba2a578857aa570ab92e3a0c7b479b",
+    "src/codehead/models/event.py": "eeaa46afa15ec8d39f5da8cd0c6a1b4608103f2b7f74117df8540d38b1a71481",
+    "src/codehead/models/llm.py": "42465f43cf9458970b7f468bbd51f0ba7ecb49a3a7f4928d6e98c53efaac5a67",
+    "src/codehead/models/message.py": "02cda0907740ae05f683fbfc5c07555a607de1913d6a4b7f9fc0ec90ad1ba191",
+    "src/codehead/models/tool.py": "1d35b4b4b28e92f35d74bc1c8d18886e3b5107c1c62d44ced05b9ab577be0e21",
+    "src/codehead/permissions.py": "be14af0e385a317eb38f7aeff4987c5e964fc2a6b163762d41f6180985b3ddb7",
+    "src/codehead/prompt/__init__.py": "7d71c800944c8cb5db5456bb24ab16e5f0058c9b2d691af6af54898ed4c383af",
+    "src/codehead/prompt/system.py": "94f931f38fc899d9af7fa7e82155057d0b738c7edac108e0dfe35f6f0d0555ca",
+    "src/codehead/session/__init__.py": "92c9bdfc6ba057e48659aa67a50d7df9c1730b26e6773b6550317ce9eace7ea8",
+    "src/codehead/session/history.py": "483985a6a4ebac353098ce1211623b2c1d8324efa193fa576a65a49226bfdf00",
+    "src/codehead/session/session.py": "97f445249b2bef4dc77ec326c2ee53b47bbf042b28a0648a3deae066a96635ed",
+    "src/codehead/session/store.py": "dd3769c943bea59b618a6333320b032e77e9ac24ec253cf159bb20c57c52369f",
+    "src/codehead/tools/__init__.py": "0ab03ef21ce4bda5b47a5dad38b5546a5ca301293efd9b389c71b9ff5d518242",
+    "src/codehead/tools/_atomic.py": "0a330b9b28fbd1e0e6e06442034d66d0c4debf03ec3316b76d9f6401c2f38877",
+    "src/codehead/tools/_process_launcher.py": "0d66190c3a4b46cf883a82a43b628cfc5682d0ec9fc90a4e4bc06e9c1c8325a5",
+    "src/codehead/tools/_windows_job.py": "1cd1ae8c4121b60eab934a8f9a31312476b934f997d73acd4567f8fd870ffcf7",
+    "src/codehead/tools/base.py": "56667f89c93c1dc39b169a8ce4a034993267d45f2a47b58c77dd0bce4d854a58",
+    "src/codehead/tools/bash.py": "135025476c4c861055d0bda4feaf363f78a12098abb68d9f01f4783cfa9d1227",
+    "src/codehead/tools/edit.py": "290f7c6aabf365fb6d60588e73ddac362ed77d2ed09ceeddb5b8c959e005aa09",
+    "src/codehead/tools/output.py": "3c1d65f10cf134d3db506d3d168716838ce08e89be556dbca0fd345550e95ed1",
+    "src/codehead/tools/process.py": "46db1d21c96f4183fd71d628ef08d3c1210e080c7e8a70d3e15349ca35875f7f",
+    "src/codehead/tools/read.py": "1da1c7586ba67bba5a636e8ca139b29732c4a384cb6922c1c2810817e67555d2",
+    "src/codehead/tools/registry.py": "1c398a5d28392d588485715520ce206336d2973c20f454d764c70f5b695fbdea",
+    "src/codehead/tools/runtime.py": "6872cb6f167c08a8c77e27cd70af5698b37475085d3a928b26d464e780a4de19",
+    "src/codehead/tools/search.py": "f1aafb077e4825ad8dc05f4d9fa10460886fcaadf563bf7372ce244d0ff59002",
+    "src/codehead/tools/write.py": "a7ce8e4c4db019069bc0337599b836c819f5aadacf5cc58ab39a22e7d9ad9059"
+  },
+  "source_b_sha256": {
+    "src/codehead/__init__.py": "29c8897ae91ff99902547cab649b80d7f55c011823a5f58ed082ea8ab68ac8f2",
+    "src/codehead/agent/__init__.py": "3364dbcbea18a6722dbf3f7c8a97a1ccd57e2f42413a919e50d04ad64d9a907d",
+    "src/codehead/agent/agent.py": "b8c3d156dd458683475f52125a2bfdda43be4daa34d26b14ac903c18c6979e32",
+    "src/codehead/agent/cancellation.py": "d9ecf24f32db04b035978e6d841785e2a91a07483db444d2d8c79330bbf67697",
+    "src/codehead/agent/context.py": "4ad37ec1323def2eee4ae26a588f8cf2f1cb62c5cf664be41dd0e429b9725345",
+    "src/codehead/agent/loop.py": "fff74183ab1ec54db0531412c9f5c44a2aeb44a377d89251dc7ce836e6c8de30",
+    "src/codehead/cancellation.py": "eded4c3d6b4dc7b293834e6ebe4b741edeb6ba4e2e76b7cf5fba006f52974e26",
+    "src/codehead/cli.py": "4cea4e2f2c4df70a488a2b61ecb619edbc558fe9e93b1fa9f91332d837cb001a",
+    "src/codehead/config.py": "1bb50cc886fa7fb490663c72c3d4027d7c510486aed367215d71cbb74bb9b40d",
+    "src/codehead/config_loader.py": "b28ee085f4b7e770ade3462b6296c7d68351eae42f687cdb08eb543e68379212",
+    "src/codehead/errors.py": "c8d9a3339e0c35f5fbb28e0a9ecb73beeccad17bc20f67ed3c254da4ea6a4844",
+    "src/codehead/llm/__init__.py": "fbf2b26e8164683c7109342bab207b95b62a2b836c5c267353ec5547cfaf34fa",
+    "src/codehead/llm/base.py": "16d180e4b6b5a439a91486c6b3f13ed9c087c6c776e6475908952551ca16168f",
+    "src/codehead/llm/openai.py": "8c642cea3c625e1a3d49ef8a5876c6f5712ec65aa66411b9637fcde66f00e969",
+    "src/codehead/models/__init__.py": "294cd7c7c9b3e5146f389ba280d02a5d16b4283b301e388cb9d9a08cb95298b9",
+    "src/codehead/models/_base.py": "d70f0c925838e1524c7a736d3a27e57c5aba2a578857aa570ab92e3a0c7b479b",
+    "src/codehead/models/event.py": "eeaa46afa15ec8d39f5da8cd0c6a1b4608103f2b7f74117df8540d38b1a71481",
+    "src/codehead/models/llm.py": "42465f43cf9458970b7f468bbd51f0ba7ecb49a3a7f4928d6e98c53efaac5a67",
+    "src/codehead/models/message.py": "02cda0907740ae05f683fbfc5c07555a607de1913d6a4b7f9fc0ec90ad1ba191",
+    "src/codehead/models/tool.py": "1d35b4b4b28e92f35d74bc1c8d18886e3b5107c1c62d44ced05b9ab577be0e21",
+    "src/codehead/permissions.py": "be14af0e385a317eb38f7aeff4987c5e964fc2a6b163762d41f6180985b3ddb7",
+    "src/codehead/prompt/__init__.py": "7d71c800944c8cb5db5456bb24ab16e5f0058c9b2d691af6af54898ed4c383af",
+    "src/codehead/prompt/system.py": "17bd83f76ac2c3b70508cf4bc5a275fef18f3864b42f9690f554ffeb0c7d204c",
+    "src/codehead/session/__init__.py": "92c9bdfc6ba057e48659aa67a50d7df9c1730b26e6773b6550317ce9eace7ea8",
+    "src/codehead/session/history.py": "483985a6a4ebac353098ce1211623b2c1d8324efa193fa576a65a49226bfdf00",
+    "src/codehead/session/session.py": "97f445249b2bef4dc77ec326c2ee53b47bbf042b28a0648a3deae066a96635ed",
+    "src/codehead/session/store.py": "dd3769c943bea59b618a6333320b032e77e9ac24ec253cf159bb20c57c52369f",
+    "src/codehead/tools/__init__.py": "0ab03ef21ce4bda5b47a5dad38b5546a5ca301293efd9b389c71b9ff5d518242",
+    "src/codehead/tools/_atomic.py": "0a330b9b28fbd1e0e6e06442034d66d0c4debf03ec3316b76d9f6401c2f38877",
+    "src/codehead/tools/_process_launcher.py": "0d66190c3a4b46cf883a82a43b628cfc5682d0ec9fc90a4e4bc06e9c1c8325a5",
+    "src/codehead/tools/_windows_job.py": "1cd1ae8c4121b60eab934a8f9a31312476b934f997d73acd4567f8fd870ffcf7",
+    "src/codehead/tools/base.py": "56667f89c93c1dc39b169a8ce4a034993267d45f2a47b58c77dd0bce4d854a58",
+    "src/codehead/tools/bash.py": "135025476c4c861055d0bda4feaf363f78a12098abb68d9f01f4783cfa9d1227",
+    "src/codehead/tools/edit.py": "290f7c6aabf365fb6d60588e73ddac362ed77d2ed09ceeddb5b8c959e005aa09",
+    "src/codehead/tools/output.py": "3c1d65f10cf134d3db506d3d168716838ce08e89be556dbca0fd345550e95ed1",
+    "src/codehead/tools/process.py": "46db1d21c96f4183fd71d628ef08d3c1210e080c7e8a70d3e15349ca35875f7f",
+    "src/codehead/tools/read.py": "1da1c7586ba67bba5a636e8ca139b29732c4a384cb6922c1c2810817e67555d2",
+    "src/codehead/tools/registry.py": "1c398a5d28392d588485715520ce206336d2973c20f454d764c70f5b695fbdea",
+    "src/codehead/tools/runtime.py": "6872cb6f167c08a8c77e27cd70af5698b37475085d3a928b26d464e780a4de19",
+    "src/codehead/tools/search.py": "f1aafb077e4825ad8dc05f4d9fa10460886fcaadf563bf7372ce244d0ff59002",
+    "src/codehead/tools/write.py": "a7ce8e4c4db019069bc0337599b836c819f5aadacf5cc58ab39a22e7d9ad9059"
+  },
+  "groups": [
+    {
+      "task": "008",
+      "source": "A",
+      "runs": 3,
+      "passed": 3,
+      "shell_incompatible_commands": 3,
+      "bash_heredoc_commands": 1,
+      "platform_api_incompatible_commands": 1,
+      "affected_runs": 3,
+      "normal_requests": {
+        "median": 13,
+        "min": 10,
+        "max": 15
+      },
+      "input_tokens": {
+        "median": 39855,
+        "min": 26952,
+        "max": 73001
+      },
+      "output_tokens": {
+        "median": 2599,
+        "min": 2100,
+        "max": 3135
+      },
+      "wall_time_s": {
+        "median": 22.359,
+        "min": 19.766,
+        "max": 26.328
+      },
+      "tool_failed": 6
+    },
+    {
+      "task": "008",
+      "source": "B",
+      "runs": 3,
+      "passed": 2,
+      "shell_incompatible_commands": 1,
+      "bash_heredoc_commands": 0,
+      "platform_api_incompatible_commands": 0,
+      "affected_runs": 1,
+      "normal_requests": {
+        "median": 9,
+        "min": 9,
+        "max": 20
+      },
+      "input_tokens": {
+        "median": 27557,
+        "min": 21958,
+        "max": 131633
+      },
+      "output_tokens": {
+        "median": 2011,
+        "min": 1554,
+        "max": 4307
+      },
+      "wall_time_s": {
+        "median": 17.234,
+        "min": 15.5,
+        "max": 48.391
+      },
+      "tool_failed": 4
+    }
+  ],
+  "totals": {
+    "normal_requests": 99,
+    "summary_requests": 0,
+    "input_tokens": 632602,
+    "output_tokens": 19755,
+    "requests_without_usage": 1
+  },
+  "baseline": "Current b52f45b working tree before OS/Shell prompt change; existing AGENTS.md diff preserved",
+  "model_attempts": 8,
+  "comparative_attempts": 6,
+  "resume_attempts": 0,
+  "metric_definition": {
+    "shell_incompatible_commands": "Reviewed PowerShell syntax and native argument quoting failures; counted once per command",
+    "platform_api_incompatible_commands": "Separate unsupported .NET API usage; not included in the shell syntax/argument metric",
+    "token_usage": "Observed completed Provider responses, including summaries if any; interrupted request usage is unknown",
+    "success": "Final answer within max_steps, independent functional acceptance, tests and change scope all pass"
+  },
+  "limitations": [
+    "Only three runs per group; no statistical or causal performance claim",
+    "Task workspaces and sessions are fresh; host TEMP and installed tools are shared",
+    "012 was interrupted by evaluator; excluded from agent-success interpretation",
+    "Real Unix host was not tested"
+  ],
+  "conclusion": "Retain factual OS/Shell prompt. Observed compatibility errors decrease 3 to 1, but success is A 3/3 and B 2/3; no stable overall benefit demonstrated.",
+  "task_spec_sha256": {
+    "008": "6edbb440ad79fad787d6a6ac4d6db26df7210b5b94b2ac76bf32301ea919fb62",
+    "011": "f3d5a35a1e4ff66b8e718e225fb44015456230331bf104b53310db03628ddab9",
+    "012": "50c6b6ee0cb7dd0fee811a6bea6c79db8b0c1927b814b51d2327a8cfd386d829"
+  },
+  "attempts": [
+    {
+      "attempt": "008-A-1",
+      "task": "008",
+      "source": "A",
+      "exit_code": 0,
+      "harness_status": "completed",
+      "task_passed": true,
+      "normal_requests": 13,
+      "summary_requests": 0,
+      "input_tokens": 39855,
+      "output_tokens": 2100,
+      "requests_without_usage": 0,
+      "wall_time_s": 22.359,
+      "wall_time_is_lower_bound": null,
+      "tool_calls": 16,
+      "tool_failed": 2,
+      "tool_denied": 0,
+      "compactions": 0,
+      "shell_commands": 9,
+      "shell_incompatible_commands": 1,
+      "platform_api_incompatible_commands": 0,
+      "bash_heredoc_commands": 0,
+      "commands_reviewed": true,
+      "changed_files": [
+        "README.md",
+        "clients.py",
+        "tests/test_clients.py"
+      ],
+      "turn_failures": [],
+      "session_id": "57ee317699ee442fa99611d1e63430c5",
+      "acceptance": {
+        "checks": {
+          "clients_bytes": true,
+          "readme_bytes": true,
+          "agents_unchanged": true,
+          "existing_tests_preserved": true,
+          "archive_regression_added": true,
+          "change_scope": true
+        },
+        "public_tests_exit": 0,
+        "extra_values_exit": 0,
+        "passed": true
+      },
+      "agent_executed_tests": true,
+      "final_report_review": "Consistent with observed files and unittest output",
+      "failure_categories": [
+        {
+          "tool": "bash",
+          "category": "implementation_backup_directory"
+        },
+        {
+          "tool": "bash",
+          "category": "shell_syntax_incompatible"
+        }
+      ]
+    },
+    {
+      "attempt": "008-B-1",
+      "task": "008",
+      "source": "B",
+      "exit_code": 1,
+      "harness_status": "step_limit",
+      "task_passed": false,
+      "normal_requests": 20,
+      "summary_requests": 0,
+      "input_tokens": 131633,
+      "output_tokens": 4307,
+      "requests_without_usage": 0,
+      "wall_time_s": 48.391,
+      "wall_time_is_lower_bound": null,
+      "tool_calls": 25,
+      "tool_failed": 2,
+      "tool_denied": 0,
+      "compactions": 0,
+      "shell_commands": 17,
+      "shell_incompatible_commands": 1,
+      "platform_api_incompatible_commands": 0,
+      "bash_heredoc_commands": 0,
+      "commands_reviewed": true,
+      "changed_files": [
+        ".check_tmp.py",
+        "README.md",
+        "clients.py",
+        "tests/test_clients.py"
+      ],
+      "turn_failures": [
+        {
+          "turn_id": "5046293b59c644e39f24d9bf440134a5",
+          "type": "turn.failed",
+          "reason": "Agent did not produce a final answer within 20 steps"
+        }
+      ],
+      "session_id": "08221ab610e24250955bf90d7d486f8e",
+      "acceptance": {
+        "checks": {
+          "clients_bytes": true,
+          "readme_bytes": true,
+          "agents_unchanged": true,
+          "existing_tests_preserved": true,
+          "archive_regression_added": true,
+          "change_scope": false
+        },
+        "public_tests_exit": 0,
+        "extra_values_exit": 0,
+        "passed": false
+      },
+      "agent_executed_tests": true,
+      "final_report_review": "No final answer; not evaluated",
+      "failure_categories": [
+        {
+          "tool": "bash",
+          "category": "incorrect_text_match"
+        },
+        {
+          "tool": "bash",
+          "category": "shell_syntax_incompatible"
+        }
+      ]
+    },
+    {
+      "attempt": "008-B-2",
+      "task": "008",
+      "source": "B",
+      "exit_code": 0,
+      "harness_status": "completed",
+      "task_passed": true,
+      "normal_requests": 9,
+      "summary_requests": 0,
+      "input_tokens": 21958,
+      "output_tokens": 1554,
+      "requests_without_usage": 0,
+      "wall_time_s": 15.5,
+      "wall_time_is_lower_bound": null,
+      "tool_calls": 10,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "shell_commands": 6,
+      "shell_incompatible_commands": 0,
+      "platform_api_incompatible_commands": 0,
+      "bash_heredoc_commands": 0,
+      "commands_reviewed": true,
+      "changed_files": [
+        "README.md",
+        "clients.py",
+        "tests/test_clients.py"
+      ],
+      "turn_failures": [],
+      "session_id": "6fb2353dfc6d4c4a93544a89eac7ab59",
+      "acceptance": {
+        "checks": {
+          "clients_bytes": true,
+          "readme_bytes": true,
+          "agents_unchanged": true,
+          "existing_tests_preserved": true,
+          "archive_regression_added": true,
+          "change_scope": true
+        },
+        "public_tests_exit": 0,
+        "extra_values_exit": 0,
+        "passed": true
+      },
+      "agent_executed_tests": true,
+      "final_report_review": "Consistent with observed files and unittest output",
+      "failure_categories": [
+        {
+          "tool": "bash",
+          "category": "non_git_directory_probe"
+        }
+      ]
+    },
+    {
+      "attempt": "008-A-2",
+      "task": "008",
+      "source": "A",
+      "exit_code": 0,
+      "harness_status": "completed",
+      "task_passed": true,
+      "normal_requests": 15,
+      "summary_requests": 0,
+      "input_tokens": 73001,
+      "output_tokens": 3135,
+      "requests_without_usage": 0,
+      "wall_time_s": 26.328,
+      "wall_time_is_lower_bound": null,
+      "tool_calls": 21,
+      "tool_failed": 2,
+      "tool_denied": 0,
+      "compactions": 0,
+      "shell_commands": 13,
+      "shell_incompatible_commands": 1,
+      "platform_api_incompatible_commands": 1,
+      "bash_heredoc_commands": 1,
+      "commands_reviewed": true,
+      "changed_files": [
+        "README.md",
+        "clients.py",
+        "tests/test_clients.py"
+      ],
+      "turn_failures": [],
+      "session_id": "96af2253fc704755961cca2cec60513b",
+      "acceptance": {
+        "checks": {
+          "clients_bytes": true,
+          "readme_bytes": true,
+          "agents_unchanged": true,
+          "existing_tests_preserved": true,
+          "archive_regression_added": true,
+          "change_scope": true
+        },
+        "public_tests_exit": 0,
+        "extra_values_exit": 0,
+        "passed": true
+      },
+      "agent_executed_tests": true,
+      "final_report_review": "Consistent with observed files and unittest output",
+      "failure_categories": [
+        {
+          "tool": "bash",
+          "category": "shell_syntax_incompatible"
+        },
+        {
+          "tool": "bash",
+          "category": "incorrect_verification"
+        }
+      ]
+    },
+    {
+      "attempt": "008-A-3",
+      "task": "008",
+      "source": "A",
+      "exit_code": 0,
+      "harness_status": "completed",
+      "task_passed": true,
+      "normal_requests": 10,
+      "summary_requests": 0,
+      "input_tokens": 26952,
+      "output_tokens": 2599,
+      "requests_without_usage": 0,
+      "wall_time_s": 19.766,
+      "wall_time_is_lower_bound": null,
+      "tool_calls": 11,
+      "tool_failed": 2,
+      "tool_denied": 0,
+      "compactions": 0,
+      "shell_commands": 6,
+      "shell_incompatible_commands": 1,
+      "platform_api_incompatible_commands": 0,
+      "bash_heredoc_commands": 0,
+      "commands_reviewed": true,
+      "changed_files": [
+        "README.md",
+        "clients.py",
+        "tests/test_clients.py"
+      ],
+      "turn_failures": [],
+      "session_id": "25ee873f0bf24652be5277485a012358",
+      "acceptance": {
+        "checks": {
+          "clients_bytes": true,
+          "readme_bytes": true,
+          "agents_unchanged": true,
+          "existing_tests_preserved": true,
+          "archive_regression_added": true,
+          "change_scope": true
+        },
+        "public_tests_exit": 0,
+        "extra_values_exit": 0,
+        "passed": true
+      },
+      "agent_executed_tests": true,
+      "final_report_review": "Consistent with observed files and unittest output",
+      "failure_categories": [
+        {
+          "tool": "bash",
+          "category": "shell_syntax_incompatible"
+        },
+        {
+          "tool": "bash",
+          "category": "non_git_directory_probe"
+        }
+      ]
+    },
+    {
+      "attempt": "008-B-3",
+      "task": "008",
+      "source": "B",
+      "exit_code": 0,
+      "harness_status": "completed",
+      "task_passed": true,
+      "normal_requests": 9,
+      "summary_requests": 0,
+      "input_tokens": 27557,
+      "output_tokens": 2011,
+      "requests_without_usage": 0,
+      "wall_time_s": 17.234,
+      "wall_time_is_lower_bound": null,
+      "tool_calls": 12,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "shell_commands": 5,
+      "shell_incompatible_commands": 0,
+      "platform_api_incompatible_commands": 0,
+      "bash_heredoc_commands": 0,
+      "commands_reviewed": true,
+      "changed_files": [
+        "README.md",
+        "clients.py",
+        "tests/test_clients.py"
+      ],
+      "turn_failures": [],
+      "session_id": "1e200ff062e649f38a1cda193d355470",
+      "acceptance": {
+        "checks": {
+          "clients_bytes": true,
+          "readme_bytes": true,
+          "agents_unchanged": true,
+          "existing_tests_preserved": true,
+          "archive_regression_added": true,
+          "change_scope": true
+        },
+        "public_tests_exit": 0,
+        "extra_values_exit": 0,
+        "passed": true
+      },
+      "agent_executed_tests": true,
+      "final_report_review": "Consistent with observed files and unittest output",
+      "failure_categories": [
+        {
+          "tool": "bash",
+          "category": "non_git_directory_probe"
+        }
+      ]
+    },
+    {
+      "attempt": "011-B-1",
+      "task": "011",
+      "source": "B",
+      "exit_code": 1,
+      "harness_status": "step_limit",
+      "task_passed": false,
+      "normal_requests": 20,
+      "summary_requests": 0,
+      "input_tokens": 307217,
+      "output_tokens": 3870,
+      "requests_without_usage": 0,
+      "wall_time_s": 55.781,
+      "wall_time_is_lower_bound": null,
+      "tool_calls": 25,
+      "tool_failed": 4,
+      "tool_denied": 0,
+      "compactions": 0,
+      "shell_commands": 15,
+      "shell_incompatible_commands": null,
+      "platform_api_incompatible_commands": null,
+      "bash_heredoc_commands": 0,
+      "commands_reviewed": false,
+      "changed_files": [
+        "repro_env.py",
+        "repro_raw.py"
+      ],
+      "turn_failures": [
+        {
+          "turn_id": "462da7f4d59e403b8521ca429f652e0e",
+          "type": "turn.failed",
+          "reason": "Agent did not produce a final answer within 20 steps"
+        }
+      ],
+      "session_id": "b0cf36dfd5ca4640a83447154f2b1010",
+      "acceptance": {
+        "passed": false,
+        "checks": {
+          "hash": false,
+          "unicode": false,
+          "cmdlet-error": false,
+          "native-exit": true,
+          "native-pipe": false,
+          "credential": true,
+          "parent-environment": true
+        },
+        "verification": {
+          "related_tests": 1,
+          "full_tests": 1,
+          "lint": 1,
+          "format": 1
+        },
+        "short_path_confirmation": 0
+      },
+      "agent_executed_tests": false,
+      "final_report_review": "No final answer; not evaluated",
+      "notes": "20 steps spent inspecting and reproducing; only two repro scripts added, no production fix. Default-temp and long-path evaluator test failures retained separately."
+    },
+    {
+      "attempt": "012-B-1",
+      "task": "012",
+      "source": "B",
+      "exit_code": null,
+      "harness_status": "evaluator_interrupted",
+      "task_passed": null,
+      "normal_requests": 3,
+      "summary_requests": 0,
+      "input_tokens": 4429,
+      "output_tokens": 179,
+      "requests_without_usage": 1,
+      "wall_time_s": 3.156,
+      "wall_time_is_lower_bound": true,
+      "tool_calls": 4,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "shell_commands": 2,
+      "shell_incompatible_commands": null,
+      "platform_api_incompatible_commands": null,
+      "bash_heredoc_commands": 0,
+      "commands_reviewed": false,
+      "changed_files": [],
+      "turn_failures": [],
+      "session_id": "05d96d93d4a84835a2ccd4db8825f159",
+      "acceptance": {
+        "passed": false,
+        "checks": {
+          "Windows/missing/os": false,
+          "Windows/missing/shell": false,
+          "Windows/missing/workspace": true,
+          "Windows/missing/no-host-shell": true,
+          "Windows/missing/no-nested": true,
+          "Windows/missing/agents": true,
+          "Windows/blank/os": false,
+          "Windows/blank/shell": false,
+          "Windows/blank/workspace": true,
+          "Windows/blank/no-host-shell": true,
+          "Windows/blank/no-nested": true,
+          "Windows/blank/agents": true,
+          "Windows/present/os": false,
+          "Windows/present/shell": false,
+          "Windows/present/workspace": true,
+          "Windows/present/no-host-shell": true,
+          "Windows/present/no-nested": true,
+          "Windows/present/agents": true,
+          "Linux/missing/os": false,
+          "Linux/missing/shell": false,
+          "Linux/missing/workspace": true,
+          "Linux/missing/no-host-shell": true,
+          "Linux/missing/no-nested": true,
+          "Linux/missing/agents": true,
+          "Linux/blank/os": false,
+          "Linux/blank/shell": false,
+          "Linux/blank/workspace": true,
+          "Linux/blank/no-host-shell": true,
+          "Linux/blank/no-nested": true,
+          "Linux/blank/agents": true,
+          "Linux/present/os": false,
+          "Linux/present/shell": false,
+          "Linux/present/workspace": true,
+          "Linux/present/no-host-shell": true,
+          "Linux/present/no-nested": true,
+          "Linux/present/agents": true,
+          "Darwin/missing/os": false,
+          "Darwin/missing/shell": false,
+          "Darwin/missing/workspace": true,
+          "Darwin/missing/no-host-shell": true,
+          "Darwin/missing/no-nested": true,
+          "Darwin/missing/agents": true,
+          "Darwin/blank/os": false,
+          "Darwin/blank/shell": false,
+          "Darwin/blank/workspace": true,
+          "Darwin/blank/no-host-shell": true,
+          "Darwin/blank/no-nested": true,
+          "Darwin/blank/agents": true,
+          "Darwin/present/os": false,
+          "Darwin/present/shell": false,
+          "Darwin/present/workspace": true,
+          "Darwin/present/no-host-shell": true,
+          "Darwin/present/no-nested": true,
+          "Darwin/present/agents": true
+        },
+        "verification": {
+          "related_tests": 0,
+          "full_tests": 1,
+          "lint": 0,
+          "format": 0
+        },
+        "short_path_confirmation": 0
+      },
+      "agent_executed_tests": false,
+      "final_report_review": "No final answer; not evaluated",
+      "notes": "Evaluator interrupted request 3 after two complete responses; no code edits, no normal exit. One request usage unknown. Not counted as model failure."
+    },
+    {
+      "attempt": "012-resume-B-1",
+      "status": "not_run",
+      "reason": "012 first turn was interrupted by evaluator before completion; session remains active and cannot be resumed. No replacement sample."
+    }
+  ]
+}

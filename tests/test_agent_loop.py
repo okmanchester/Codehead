@@ -339,6 +339,33 @@ def test_system_prompt_includes_only_root_agents_file(tmp_path: Path) -> None:
     assert "Nested instructions" not in prompt
 
 
+@pytest.mark.parametrize("operating_system", ["Windows", "Linux", "Darwin"])
+@pytest.mark.parametrize("instructions", [None, "", "Root instructions"])
+def test_system_prompt_reports_actual_shell(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    operating_system: str,
+    instructions: str | None,
+) -> None:
+    from codehead.tools.bash import _shell_command
+
+    monkeypatch.setattr("platform.system", lambda: operating_system)
+    if instructions is not None:
+        (tmp_path / "AGENTS.md").write_text(instructions, encoding="utf-8")
+
+    prompt = build_system_prompt(tmp_path)
+    expected_shell = "powershell.exe" if operating_system == "Windows" else "/bin/bash"
+
+    assert f"Operating system: {operating_system}\n" in prompt
+    assert f"Shell: {expected_shell}\n" in prompt
+    assert _shell_command("echo test")[0] == expected_shell
+    assert str(tmp_path.resolve()) in prompt
+    if instructions:
+        assert prompt.endswith(f"Project instructions from AGENTS.md:\n{instructions}")
+    else:
+        assert "Project instructions from AGENTS.md:" not in prompt
+
+
 def test_event_order_and_session_commit_boundaries() -> None:
     async def check():
         tool = RecordingTool()

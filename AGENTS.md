@@ -12,6 +12,10 @@ Codehead 是一个 Coding Agent 项目，用于探索和实现现代 Coding Agen
 conda activate codehead
 ```
 
+## 仓库维护
+
+时刻维护.gitignore文件与仓库文件，非必需文件无需纳入 git 版本管理，低价值文件可删除
+
 ## 工程原则
 
 * 修改应聚焦当前任务，不要擅自扩大范围。

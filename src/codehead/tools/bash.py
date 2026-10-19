@@ -142,6 +142,7 @@ class BashTool(Tool):
 
 def _shell_command(command: str) -> list[str]:
     if platform.system() == "Windows":
+        # A native zero must not hide a later cmdlet failure.
         wrapped_command = (
             "$OutputEncoding = [Console]::InputEncoding = "
             "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)\n"
@@ -149,7 +150,7 @@ def _shell_command(command: str) -> list[str]:
             "$global:__codehead_command_succeeded = $?\n"
             "$global:__codehead_native_exit_code = $LASTEXITCODE\n"
             "} | Out-Default\n"
-            "if ($null -ne $__codehead_native_exit_code) { exit $__codehead_native_exit_code }\n"
+            "if ($__codehead_native_exit_code) { exit $__codehead_native_exit_code }\n"
             "if (-not $__codehead_command_succeeded) { exit 1 }\n"
             "exit 0"
         )

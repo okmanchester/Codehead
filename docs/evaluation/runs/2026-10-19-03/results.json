@@ -1,0 +1,370 @@
+{
+  "run_id": "2026-10-19-03",
+  "task": "013: original 012 first turn only",
+  "git_commit": "b52f45b132593f152d8ff38264ed9d9725dc3a6e",
+  "hashes": {
+    "algorithm": "SHA-256; tree hashes use sorted compact JSON of relative-path-to-file-hash mapping",
+    "source_archive": "22288020a2abf11f05b2f92511844eac1747c9abb36d664ef6163a8c3dce8d63",
+    "initial_worktree_diff": "e0914441c1e356641ad8794176dc10e81a9c4c46bdffe97444ccaaf56185b189",
+    "driver_tree": "2ea7d96d586deada86233d5578b4c7d20804172243d251c96bd6330e0f0b86e2",
+    "baseline_tree": "6873720a8a2466a74fede5bb67933829b1592297dbb358b351462dcb6d805de4",
+    "prompt": "ef2f7abb401198ce4ada3107465680017c4efa03da205c14c38e0f9b66927e84",
+    "tool_permissions": "97413ab546a886c134f4a5f194eed9b79378e61559ebb99858a6d3f246c16ef5"
+  },
+  "configuration": {
+    "model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "disable_thinking": true,
+    "context_budget": 65536,
+    "python": "3.12.13",
+    "platform": "Windows",
+    "order": [
+      20,
+      40,
+      40,
+      20
+    ],
+    "normal_request_cap": 120,
+    "driver_source": "unchanged frozen B from 2026-10-19-02.zip",
+    "target_baseline": "identical pre-OS/Shell feature snapshot",
+    "permission_rules": "explicit allow for all six existing tools",
+    "timeout_seconds": 600
+  },
+  "runs": [
+    {
+      "run_id": "r1-20",
+      "max_steps": 20,
+      "session_id": "5de6a7fc5b0f4640a8b079c882269062",
+      "normal_requests": 20,
+      "summary_requests": 0,
+      "input_tokens": 447707,
+      "output_tokens": 3816,
+      "usage_by_category": {
+        "normal": {
+          "input_tokens": 447707,
+          "output_tokens": 3816
+        },
+        "summary": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      },
+      "missing_usage": 0,
+      "wall_time_s": 76.125,
+      "successful_compactions": 0,
+      "exit_code": 0,
+      "session_status": "closed",
+      "turn_status": "failed",
+      "final_answer_step": null,
+      "functional_acceptance": true,
+      "functional_checks": 54,
+      "independent_checks": {
+        "probe": 0,
+        "related": 0,
+        "full": 0,
+        "lint": 0,
+        "format": 1
+      },
+      "related_summary": "107 passed in 3.93s",
+      "full_summary": "408 passed, 1 skipped in 19.66s",
+      "original_tests_ast_screen_passed": false,
+      "original_tests_not_weakened": true,
+      "readme_updated": false,
+      "full_argv_and_prompt_preserved": true,
+      "scope_passed": true,
+      "final_answer_accurate": null,
+      "complete_success": false,
+      "first_successful_post_change_self_test_step": 16,
+      "first_complete_model_verification_step": null,
+      "after_first_self_test": {
+        "requests": 4,
+        "steps": {
+          "17": "extra mutation test; expected failure, but replacement also introduces literal backslash-n",
+          "18": "extra mutation test; same malformed-line artifact",
+          "19": "repeat failed mutation inspection, not evidence of a valid behavioral mutant",
+          "20": "necessary restore and related retest after self-induced mutation"
+        }
+      },
+      "shell_syntax_incompatibilities": 0,
+      "tool_calls": 29,
+      "tool_failures": 4,
+      "changed_files": [
+        "src/codehead/prompt/system.py",
+        "src/codehead/tools/bash.py",
+        "tests/test_agent_loop.py",
+        "tests/test_tools.py"
+      ],
+      "verdict": "Functional acceptance passed, but README missing, formatting failed, and no final answer after 20 steps."
+    },
+    {
+      "run_id": "r2-40",
+      "max_steps": 40,
+      "session_id": "1d0c34e2f7264dac9803790d0441d8b4",
+      "normal_requests": 22,
+      "summary_requests": 0,
+      "input_tokens": 390711,
+      "output_tokens": 3772,
+      "usage_by_category": {
+        "normal": {
+          "input_tokens": 390711,
+          "output_tokens": 3772
+        },
+        "summary": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      },
+      "missing_usage": 0,
+      "wall_time_s": 71.89,
+      "successful_compactions": 0,
+      "exit_code": 0,
+      "session_status": "closed",
+      "turn_status": "completed",
+      "final_answer_step": 22,
+      "functional_acceptance": true,
+      "functional_checks": 54,
+      "independent_checks": {
+        "probe": 0,
+        "related": 0,
+        "full": 0,
+        "lint": 0,
+        "format": 0
+      },
+      "related_summary": "103 passed in 3.79s",
+      "full_summary": "410 passed, 1 skipped in 18.89s",
+      "original_tests_ast_screen_passed": true,
+      "original_tests_not_weakened": true,
+      "readme_updated": true,
+      "full_argv_and_prompt_preserved": true,
+      "scope_passed": true,
+      "final_answer_accurate": true,
+      "complete_success": true,
+      "first_successful_post_change_self_test_step": 17,
+      "first_complete_model_verification_step": 20,
+      "after_first_self_test": {
+        "requests": 5,
+        "steps": {
+          "18": "necessary README update",
+          "19": "additional full regression suite",
+          "20": "additional lint/format validation",
+          "21": "extra live prompt sample",
+          "22": "final answer"
+        }
+      },
+      "shell_syntax_incompatibilities": 0,
+      "tool_calls": 30,
+      "tool_failures": 1,
+      "changed_files": [
+        "README.md",
+        "src/codehead/prompt/system.py",
+        "src/codehead/tools/bash.py",
+        "tests/test_prompt.py"
+      ],
+      "verdict": "Complete success at step 22; additional budget allowed this trajectory to return a final answer after step 20."
+    },
+    {
+      "run_id": "r3-40",
+      "max_steps": 40,
+      "session_id": "98cc6dee3b414b3aaafc0ea3cada58ec",
+      "normal_requests": 30,
+      "summary_requests": 0,
+      "input_tokens": 472373,
+      "output_tokens": 5470,
+      "usage_by_category": {
+        "normal": {
+          "input_tokens": 472373,
+          "output_tokens": 5470
+        },
+        "summary": {
+          "input_tokens": 0,
+          "output_tokens": 0
+        }
+      },
+      "missing_usage": 0,
+      "wall_time_s": 108.563,
+      "successful_compactions": 0,
+      "exit_code": 0,
+      "session_status": "closed",
+      "turn_status": "completed",
+      "final_answer_step": 30,
+      "functional_acceptance": true,
+      "functional_checks": 54,
+      "independent_checks": {
+        "probe": 0,
+        "related": 0,
+        "full": 0,
+        "lint": 0,
+        "format": 0
+      },
+      "related_summary": "110 passed in 3.96s",
+      "full_summary": "408 passed, 1 skipped in 19.11s",
+      "original_tests_ast_screen_passed": true,
+      "original_tests_not_weakened": true,
+      "readme_updated": true,
+      "full_argv_and_prompt_preserved": true,
+      "scope_passed": true,
+      "final_answer_accurate": true,
+      "complete_success": true,
+      "first_successful_post_change_self_test_step": 20,
+      "first_complete_model_verification_step": 28,
+      "after_first_self_test": {
+        "requests": 10,
+        "steps": {
+          "21": "extra deliberate mutation test and restore; six targeted failures expected",
+          "22": "necessary README updates",
+          "23": "review README",
+          "24": "README wrapping edit introduces SheII typo",
+          "25": "correct self-induced typo",
+          "26": "extra README shell inspection; Get-Content decodes UTF-8 without BOM using legacy default, output mojibake",
+          "27": "read tool confirms intact UTF-8 README",
+          "28": "additional full regression and lint",
+          "29": "extra live prompt and AGENTS check",
+          "30": "final answer"
+        }
+      },
+      "shell_syntax_incompatibilities": 0,
+      "tool_calls": 43,
+      "tool_failures": 1,
+      "changed_files": [
+        "README.md",
+        "src/codehead/prompt/system.py",
+        "tests/test_agent_loop.py"
+      ],
+      "verdict": "Complete success at step 30. Beyond step 20, README and full verification were still necessary, with extra mutation, inspection and self-induced typo repair mixed in."
+    },
+    {
+      "run_id": "r4-20",
+      "max_steps": 20,
+      "session_id": "b58224f45ab64b3cac66d618a231956e",
+      "normal_requests": 20,
+      "summary_requests": 1,
+      "input_tokens": 455348,
+      "output_tokens": 5136,
+      "usage_by_category": {
+        "normal": {
+          "input_tokens": 433122,
+          "output_tokens": 4218
+        },
+        "summary": {
+          "input_tokens": 22226,
+          "output_tokens": 918
+        }
+      },
+      "missing_usage": 0,
+      "wall_time_s": 37.297,
+      "successful_compactions": 1,
+      "exit_code": 0,
+      "session_status": "closed",
+      "turn_status": "failed",
+      "final_answer_step": null,
+      "functional_acceptance": true,
+      "functional_checks": 54,
+      "independent_checks": {
+        "probe": 0,
+        "related": 0,
+        "full": 2,
+        "lint": 0,
+        "format": 0
+      },
+      "related_summary": "103 passed in 3.95s",
+      "full_summary": "1 error in 1.49s",
+      "original_tests_ast_screen_passed": true,
+      "original_tests_not_weakened": true,
+      "readme_updated": false,
+      "full_argv_and_prompt_preserved": true,
+      "scope_passed": true,
+      "final_answer_accurate": null,
+      "complete_success": false,
+      "first_successful_post_change_self_test_step": null,
+      "first_complete_model_verification_step": null,
+      "after_first_self_test": null,
+      "shell_syntax_incompatibilities": 0,
+      "tool_calls": 35,
+      "tool_failures": 0,
+      "changed_files": [
+        "src/codehead/prompt/system.py",
+        "src/codehead/tools/bash.py",
+        "tests/test_system_prompt.py"
+      ],
+      "verdict": "Functional acceptance passed, but new tests do not collect, README missing, and no final answer. Steps 17-19 repeatedly rewrite an unexecuted mock-based test; step 20 reads implementation. One natural compaction, not a dedicated retention validation."
+    }
+  ],
+  "groups": {
+    "20": {
+      "attempts": 2,
+      "complete_successes": 0,
+      "functional_passes": 2,
+      "normal_requests": 40,
+      "input_tokens": 903055,
+      "output_tokens": 8952
+    },
+    "40": {
+      "attempts": 2,
+      "complete_successes": 2,
+      "functional_passes": 2,
+      "normal_requests": 52,
+      "input_tokens": 863084,
+      "output_tokens": 9242
+    }
+  },
+  "totals": {
+    "normal_requests": 92,
+    "summary_requests": 1,
+    "input_tokens": 1766139,
+    "output_tokens": 18194,
+    "missing_usage": 0,
+    "successful_compactions": 1,
+    "tool_calls": 137,
+    "tool_failures": 6
+  },
+  "conclusions": {
+    "extra_budget_enabled_two_observed_trajectories": true,
+    "stable_benefit_proven": false,
+    "production_default_max_steps": 20,
+    "failures_are_not_only_missing_final_answers": true,
+    "no_model_retries": true,
+    "no_resume": true,
+    "no_specimen_code_adopted": true,
+    "successful_first_turn_resume": "not verified",
+    "compaction_retention": "not separately evaluated",
+    "real_unix_validation": false
+  },
+  "replay_fixture": {
+    "passed": true,
+    "gates": {
+      "old_masking_confirmed": true,
+      "inner_trigger_reaches_target": true,
+      "unicode_failure_reproduced": true,
+      "frozen_fixed_controls_pass": true,
+      "current_fixed_control_pass": true
+    },
+    "old_tool_sha256": "b4cca0265fc7e8096bf987297c5ae5d437cf394e79a0a0f961e7fb15f30cdfe6",
+    "live_model_calls": 0
+  },
+  "main_workspace": {
+    "production_sources_and_existing_tests_unchanged": true,
+    "user_agents_preserved": true,
+    "handoff_not_read_or_modified": true
+  },
+  "incidents": [
+    {
+      "stage": "synthetic preflight",
+      "description": "Sandbox subprocess timed out after 120 seconds before live calls; evidence retained; permission-enabled local preflight passed.",
+      "counted_as_live_sample": false
+    },
+    {
+      "stage": "post-run path audit",
+      "description": "Unquoted Windows basetemp in PYTEST_ADDOPTS was parsed by shlex with backslashes consumed. All four runs and independent validation used writable short paths different from intended paths. No model samples rerun. Future preflight now checks actual pytest basetemp with quoted forward-slash paths.",
+      "counted_as_live_sample": false
+    },
+    {
+      "stage": "local safe-path check",
+      "description": "First local check failed because basetemp parent did not exist; original output retained. Parent created, then one local test passed.",
+      "counted_as_live_sample": false
+    }
+  ],
+  "archive": {
+    "path": ".codehead/evaluations/2026-10-19-03.zip",
+    "checksum_sidecar": ".codehead/evaluations/2026-10-19-03.zip.sha256"
+  }
+}
