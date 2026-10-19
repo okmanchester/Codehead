@@ -558,7 +558,7 @@ def test_cli_resume_uses_current_project_configuration(tmp_path, monkeypatch):
     provider = Provider([answer("next answer")])
     captured = []
 
-    def build(config):
+    def build(config, **kwargs):
         captured.append(config)
         return loop_for(provider, max_steps=config.max_steps)
 

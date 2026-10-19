@@ -73,7 +73,7 @@ ADR 是**增量演进**的，不是一次性快照：
 | [0006](0006-workspace-boundary-no-sandbox.md) | workspace 文件边界、无沙箱与环境清理 | Superseded by [0014](0014-tool-permissions.md) | 2026-09-22 | `afa3983`、`1e05fd2` |
 | [0007](0007-tool-behavior-tradeoffs.md) | 工具行为取舍：read 分页、edit 唯一精确匹配、检索依赖 ripgrep | Accepted | 2026-09-23 | `70af0ec`、`ce3f600` |
 | [0008](0008-append-only-archive.md) | append-only SQLite 存档与活跃上下文分离 | Accepted | 2026-09-23 | `7faa835` |
-| [0009](0009-estimated-context-compaction.md) | 估算驱动的阈值自动压缩 | Accepted | 2026-09-23 | `7faa835` |
+| [0009](0009-estimated-context-compaction.md) | 估算驱动的阈值自动压缩 | Superseded by [0019](0019-default-context-budget.md) | 2026-09-23 | `7faa835` |
 | [0010](0010-resume-contract.md) | 恢复契约：只有正常退出的会话可恢复 | Accepted | 2026-09-23 | `6273528` |
 | [0011](0011-turn-tool-lifecycle.md) | Turn / Tool 生命周期与原子提交边界 | Accepted | 2026-09-23 | `1e05fd2` |
 | [0012](0012-cancellation-and-process-trees.md) | 可控中断语义与跨平台进程树回收 | Accepted | 2026-09-23 | `1e05fd2` |
@@ -81,6 +81,9 @@ ADR 是**增量演进**的，不是一次性快照：
 | [0014](0014-tool-permissions.md) | 工具调用权限与会话授权 | Accepted | 2026-09-24 | 工作区未提交变更；提交时补来源 |
 | [0015](0015-tool-system-v1-freeze.md) | 工具系统 v1 冻结：参数契约、文件提交与错误边界 | Accepted | 2026-09-24 | 工作区未提交变更；提交时补来源 |
 | [0016](0016-runtime-configuration.md) | 运行时配置值对象与项目 TOML 加载边界 | Accepted | 2026-09-28 | 工作区未提交变更；提交时补来源 |
+| [0017](0017-headless-mode.md) | Headless 单回合执行与无人值守权限 | Accepted | 2026-10-13 | 工作区未提交变更；提交时补来源 |
+| [0018](0018-windows-shell-environment.md) | Windows Shell 的默认模块环境与 UTF-8 标准流 | Accepted | 2026-10-18 | 工作区未提交变更；提交时补来源 |
+| [0019](0019-default-context-budget.md) | 默认输入预算兼容合法的大页工具输出 | Accepted | 2026-10-18 | 工作区未提交变更；提交时补来源 |
 
 模板见 [template.md](template.md)。
 

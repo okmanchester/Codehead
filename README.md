@@ -86,7 +86,7 @@ PowerShell，Unix 使用 Bash。
 model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
 session_db = ".codehead/sessions.sqlite3"
-context_budget = 32768
+context_budget = 65536
 max_steps = 20
 ```
 
@@ -95,7 +95,7 @@ max_steps = 20
 | `model` | `deepseek-flash`，非空字符串 | `CODEHEAD_MODEL` |
 | `base_url` | `https://api.deepseek.com`，非空字符串 | `DEEPSEEK_BASE_URL` |
 | `session_db` | `.codehead/sessions.sqlite3`，相对路径以 workspace 为基准 | `CODEHEAD_SESSION_DB` |
-| `context_budget` | `32768`，整数且不小于 `1024` | `CODEHEAD_CONTEXT_BUDGET` |
+| `context_budget` | `65536`，整数且不小于 `1024` | `CODEHEAD_CONTEXT_BUDGET` |
 | `max_steps` | `20`，整数且不小于 `1`；每回合的正常模型调用上限 | `CODEHEAD_MAX_STEPS` |
 
 优先级为默认值 → TOML → `.env` → 进程环境；进程环境不会被 `.env` 覆盖，空环境变量
@@ -110,7 +110,7 @@ max_steps = 20
 from codehead.config_loader import load_local_config, load_runtime_config
 
 config = load_runtime_config()  # 完整运行参数，要求 API key
-local = load_local_config()    # 仅路径配置，不要求 API key 或有效的模型参数
+local = load_local_config()  # 仅路径配置，不要求 API key 或有效的模型参数
 ```
 
 `--list-sessions` 使用本地路径加载器；它仍检查配置文件语法和未知字段，但不校验模型
@@ -175,6 +175,11 @@ policy = PermissionPolicy.from_file(
 loop = AgentLoop(agent, permission_policy=policy)
 ```
 
+`PermissionPolicy.allow_all(workspace, names)` 是不经审批、把所有已知工具视为
+`allow` 的入口；CLI 仅在 `-p` 搭配 `--allow-all-tools` 时使用它（见「单回合执行」）。
+它不改变底层的默认分派：未显式放开的工具仍按其规则求解，无批准回调时 `ask` 变
+`deny`。
+
 ## 流式事件
 
 Provider 和 AgentLoop 使用异步流，事件类型统一从 `codehead.models` 导入。
@@ -235,13 +240,16 @@ CLI 将原始消息保存到 workspace 下的 `.codehead/sessions.sqlite3`，默
 system prompt、最新用户输入和近期消息，旧消息继续保存在数据库中，不在请求路径
 重新全量加载。工具调用和对应的全部结果始终作为一个整体保留或压缩。
 
-`CODEHEAD_CONTEXT_BUDGET` 默认 32768，最小 1024，表示估算的**输入** token 预算，
+`CODEHEAD_CONTEXT_BUDGET` 默认 65536，最小 1024，表示估算的**输入** token 预算，
 不是模型窗口大小。需根据目标模型为输出预留空间，再配置输入预算。本地估算包含
 消息、工具参数、工具定义和协议开销，使用 JSON 的 UTF-8 字节数除以 3，再加固定
 开销，初始乘以 1.2；正常请求返回的 input usage 仅向上校准当前会话的系数。
 没有 usage 时仍可估算。这不是精确 tokenizer，也不保证服务端一定不会超限。
 
 每次正常模型请求前检查用量，达到预算 75% 时自动摘要，要求压缩后不超过 50%。
+默认配置对应 49152 个估算 token 触发、压缩后不超过 32768；近期消息预算约 16384，
+摘要上限为 4096。需要更早观察压缩时，可显式设置较小预算，例如压缩评测使用的 16384；
+历史评测记录中的显式预算不随默认值变化。
 近期消息约占预算 25%，至少保留最后一个完整消息或工具交互单元，另外保留 system
 prompt 和最新用户输入。摘要复用当前模型，以独立无工具请求处理旧历史；超出单次
 输入预算时按完整单元分批合并，摘要本身上限为预算的 1/16。CLI 显示开始状态及
@@ -298,6 +306,34 @@ base_url=...)`。在调用方确认是正常退出、且没有正在执行的回
 仅释放资源，不写入正常退出标记。已 finish 的 Session 实例不能继续追加消息，应通过
 恢复入口获得新实例；调用方仍负责关闭注入的 store。
 
+## 单回合执行
+
+```text
+codehead -p "总结这个仓库的结构"                      # 单回合，答案写 stdout
+echo "修复这个 bug" | codehead -p                     # 省略 PROMPT 时从 stdin 读取
+codehead -p "跑一遍测试并修好失败的用例" --allow-all-tools   # 无人值守：跳过审批
+```
+
+`-p` / `--print` 执行一个回合后退出，不进入 REPL。省略 `PROMPT` 时读取整段 stdin，
+空白提示词报错并返回 1。该模式下 **stdout 只包含最终答案**（外加一个换行），
+其余输出——会话 ID、工具进度、压缩提示、错误，以及一行
+`[codehead] usage input=.. output=.. total=..` 用量摘要——全部写 stderr，
+便于调用方把答案与进度分别解析。
+
+退出码：`0` 表示拿到最终答案且会话正常收尾；`1` 表示启动或配置失败、模型失败、
+步数耗尽、存储失败、被中断或退出标记写入失败；`2` 表示命令行用法错误。
+print 模式下 Ctrl+C 返回 1。`-p` 与 `--list-sessions`、`--resume` 互斥，会话仍会
+照常落盘并带上正常退出标记。
+
+`--allow-all-tools` 跳过权限审批，把所有已知工具视为 `allow`，并**取代**
+`permissions.toml` 而与之不叠加；它必须与 `-p` 同时使用，默认关闭。它**不是沙箱**：
+不改变「workspace 只是文件边界、`bash` 仍可越界」这一既有事实（见「工具权限」），
+只应在一次性、可抛弃的执行环境里使用。不开启时行为与交互模式一致：`ask` 因无人
+批准而被拒绝，模型会拿到 `denied` 结果并据此调整方案。
+
+启动时标准输入、输出、错误流被固定为 UTF-8，因此管道与重定向传入的非 ASCII 文本
+按 UTF-8 解释，不受系统区域编码影响。
+
 ## 工具输出
 
 工具统一经 `ToolRuntime` 执行。注册时固定并检查工具的 Draft 2020-12 JSON Schema，
@@ -320,6 +356,11 @@ limit=100)` 使用区分大小写的逐行正则搜索并返回 `路径:行号:�
 `bash` 持续排空 stdout 和 stderr，各保留最多 20 KiB 的头尾片段，等待真实退出码或
 60 秒超时。`workdir` 只对本次调用生效，不会改变后续命令的默认目录。
 Windows 下的 PowerShell 会在退出前冲刷对象输出，并保留命令失败状态。
+Windows Shell 使用 Windows PowerShell，启动时移除子进程继承的 `PSModulePath`，
+由它重建默认模块路径，避免 PowerShell 7 的同名模块遮蔽系统模块。宿主自定义模块路径
+不会继承；需要时可在单次命令内显式导入模块。控制台输入、输出和原生命令管道编码
+固定为无 BOM 的 UTF-8，stdout/stderr 继续按 UTF-8 解码。自行输出其他编码的外部程序
+需在命令内配置编码，工具不自动识别或转码。
 `bash` 与检索工具使用同一进程管理层。Unix 使用独立进程组，取消时先发送终止信号，
 1 秒后强制终止仍存活的进程；Windows 使用 Job Object 回收命令及子进程，命令在
 成功加入 Job 后才获得启动许可。工具不能保证管理主动脱离进程组的 Unix 子进程。

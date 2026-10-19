@@ -71,6 +71,14 @@ class BashTool(Tool):
             ) from exc
         environment = os.environ.copy()
         environment.pop("DEEPSEEK_API_KEY", None)
+        if platform.system() == "Windows":
+            # PowerShell 7 module paths inherited through Python can shadow the
+            # Windows PowerShell modules. Let powershell.exe build its defaults.
+            environment = {
+                key: value
+                for key, value in environment.items()
+                if key.upper() != "PSMODULEPATH"
+            }
 
         managed = ManagedProcess(
             _shell_command(command),
@@ -135,6 +143,8 @@ class BashTool(Tool):
 def _shell_command(command: str) -> list[str]:
     if platform.system() == "Windows":
         wrapped_command = (
+            "$OutputEncoding = [Console]::InputEncoding = "
+            "[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)\n"
             f"& {{ {command}\n"
             "$global:__codehead_command_succeeded = $?\n"
             "$global:__codehead_native_exit_code = $LASTEXITCODE\n"

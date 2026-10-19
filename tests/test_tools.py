@@ -1,5 +1,8 @@
+import hashlib
+import os
 import platform
 import stat
+import sys
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -306,6 +309,93 @@ def test_windows_bash_preserves_cmdlet_and_native_failure_status(
         tool.execute({"command": 'python -c "import sys; sys.exit(3)"'})
 
 
+@pytest.mark.skipif(platform.system() != "Windows", reason="PowerShell encoding")
+@pytest.mark.parametrize("exit_code", [0, 7])
+def test_windows_bash_preserves_chinese_stdout_stderr_and_exit_code(
+    tmp_path: Path, exit_code: int
+) -> None:
+    command = (
+        "[Console]::WriteLine('中文标准输出'); "
+        "[Console]::Error.WriteLine('中文标准错误'); "
+        f"exit {exit_code}"
+    )
+    tool = BashTool(tmp_path)
+    if exit_code:
+        with pytest.raises(ToolExecutionError) as caught:
+            tool.execute({"command": command})
+        result = str(caught.value)
+    else:
+        result = tool.execute({"command": command})
+    assert f"Exit code: {exit_code}" in result
+    assert "stdout:\n中文标准输出" in result
+    assert "stderr:\n中文标准错误" in result
+    assert "\ufffd" not in result
+
+
+@pytest.mark.skipif(platform.system() != "Windows", reason="PowerShell encoding")
+def test_windows_bash_preserves_chinese_cmdlet_error(tmp_path: Path) -> None:
+    with pytest.raises(ToolExecutionError) as caught:
+        BashTool(tmp_path).execute(
+            {"command": "Write-Output '中文输出'; Write-Error '中文错误'"}
+        )
+    result = str(caught.value)
+    assert "Exit code: 1" in result
+    assert "stdout:\n中文输出" in result
+    assert "stderr:" in result and "中文错误" in result
+    assert "\ufffd" not in result
+
+
+@pytest.mark.skipif(platform.system() != "Windows", reason="PowerShell native pipes")
+def test_windows_bash_uses_utf8_for_native_pipes(tmp_path: Path) -> None:
+    tool = BashTool(tmp_path)
+    result = tool.execute(
+        {
+            "command": f"'中文输入' | & '{sys.executable}' -X utf8 -c "
+            '"import sys; print(sys.stdin.read().strip())"'
+        }
+    )
+    assert "stdout:\n中文输入" in result
+    with pytest.raises(ToolExecutionError) as caught:
+        tool.execute(
+            {
+                "command": f"& '{sys.executable}' -X utf8 -c "
+                "\"import sys; print('中文输出'); "
+                "print('中文错误', file=sys.stderr); sys.exit(7)\""
+            }
+        )
+    result = str(caught.value)
+    assert "Exit code: 7" in result
+    assert "stdout:\n中文输出" in result
+    assert "stderr:\n中文错误" in result
+    assert "\ufffd" not in result
+
+
+@pytest.mark.skipif(platform.system() != "Windows", reason="PowerShell modules")
+def test_windows_bash_rebuilds_module_path_without_changing_parent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    module = tmp_path / "modules" / "Microsoft.PowerShell.Utility"
+    module.mkdir(parents=True)
+    (module / "Microsoft.PowerShell.Utility.psd1").write_text(
+        "@{ ModuleVersion = '99.0'; PowerShellVersion = '99.0'; "
+        "FunctionsToExport = @('Get-FileHash') }",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PSModulePath", str(module.parent))
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    before = dict(os.environ)
+    data = "中文内容\n".encode()
+    (tmp_path / "中文文件.txt").write_bytes(data)
+    result = BashTool(tmp_path).execute(
+        {
+            "command": "Get-FileHash -LiteralPath '中文文件.txt' -Algorithm SHA256 "
+            "| Select-Object -ExpandProperty Hash"
+        }
+    )
+    assert hashlib.sha256(data).hexdigest().upper() in result
+    assert dict(os.environ) == before
+
+
 def test_bash_workdir_applies_to_one_call_only(tmp_path: Path) -> None:
     nested = tmp_path / "nested"
     nested.mkdir()
@@ -533,11 +623,13 @@ def test_bash_drains_large_stdout_and_stderr_with_head_tail(
     ("system_name", "executable"),
     [("Windows", "powershell.exe"), ("Linux", "/bin/bash")],
 )
+@pytest.mark.parametrize("module_key", ["PSModulePath", "PSMODULEPATH", "psmodulepath"])
 def test_bash_selects_platform_shell_and_removes_api_key(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     system_name: str,
     executable: str,
+    module_key: str,
 ) -> None:
     popen = Mock()
     managed = popen.return_value
@@ -548,7 +640,12 @@ def test_bash_selects_platform_shell_and_removes_api_key(
     process.stderr.read.return_value = b""
     process.wait.return_value = 0
     process.poll.return_value = 0
-    monkeypatch.setenv("DEEPSEEK_API_KEY", "secret")
+    environment = {
+        "DEEPSEEK_API_KEY": "secret",
+        module_key: "custom-modules",
+        "PATH": "keep-path",
+    }
+    monkeypatch.setattr(os.environ, "copy", lambda: environment.copy())
     monkeypatch.setattr("codehead.tools.bash.platform.system", lambda: system_name)
     monkeypatch.setattr("codehead.tools.bash.ManagedProcess", popen)
 
@@ -556,3 +653,10 @@ def test_bash_selects_platform_shell_and_removes_api_key(
 
     assert popen.call_args.args[0][0] == executable
     assert "DEEPSEEK_API_KEY" not in popen.call_args.kwargs["env"]
+    assert popen.call_args.kwargs["env"]["PATH"] == "keep-path"
+    if system_name == "Windows":
+        assert module_key not in popen.call_args.kwargs["env"]
+    else:
+        assert popen.call_args.kwargs["env"][module_key] == "custom-modules"
+    assert environment["DEEPSEEK_API_KEY"] == "secret"
+    assert environment[module_key] == "custom-modules"

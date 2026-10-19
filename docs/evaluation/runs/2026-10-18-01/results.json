@@ -1,0 +1,1293 @@
+{
+  "run_id": "2026-10-18-01",
+  "date": "2026-10-18",
+  "codehead_commit": "fb810de16d889cc5dd4b62d6aa424a46820fb1b5",
+  "worktree_dirty": true,
+  "baseline": "current working tree before this change, including prior uncommitted files",
+  "config": {
+    "model": "deepseek-flash",
+    "base_url": "https://api.deepseek.com",
+    "disable_thinking": true,
+    "max_steps": 20,
+    "context_budget": 32768,
+    "scenario_010_context_budget": 16384,
+    "python": "3.12.13",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "dependencies": {
+      "openai": "3.16.2",
+      "pydantic": "2.13.5",
+      "jsonschema": "4.26.0",
+      "rich": "15.0.0",
+      "python-dotenv": "1.2.3"
+    }
+  },
+  "source_a_sha256": {
+    "codehead/__init__.py": "29c8897ae91ff99902547cab649b80d7f55c011823a5f58ed082ea8ab68ac8f2",
+    "codehead/agent/__init__.py": "3364dbcbea18a6722dbf3f7c8a97a1ccd57e2f42413a919e50d04ad64d9a907d",
+    "codehead/agent/agent.py": "b8c3d156dd458683475f52125a2bfdda43be4daa34d26b14ac903c18c6979e32",
+    "codehead/agent/cancellation.py": "d9ecf24f32db04b035978e6d841785e2a91a07483db444d2d8c79330bbf67697",
+    "codehead/agent/context.py": "4ad37ec1323def2eee4ae26a588f8cf2f1cb62c5cf664be41dd0e429b9725345",
+    "codehead/agent/loop.py": "fff74183ab1ec54db0531412c9f5c44a2aeb44a377d89251dc7ce836e6c8de30",
+    "codehead/cancellation.py": "eded4c3d6b4dc7b293834e6ebe4b741edeb6ba4e2e76b7cf5fba006f52974e26",
+    "codehead/cli.py": "4cea4e2f2c4df70a488a2b61ecb619edbc558fe9e93b1fa9f91332d837cb001a",
+    "codehead/config.py": "082790985c604c0f1213d2e73afd8742dd3ee6d26dfb69515623fa1019c43863",
+    "codehead/config_loader.py": "b28ee085f4b7e770ade3462b6296c7d68351eae42f687cdb08eb543e68379212",
+    "codehead/errors.py": "c8d9a3339e0c35f5fbb28e0a9ecb73beeccad17bc20f67ed3c254da4ea6a4844",
+    "codehead/llm/__init__.py": "fbf2b26e8164683c7109342bab207b95b62a2b836c5c267353ec5547cfaf34fa",
+    "codehead/llm/base.py": "16d180e4b6b5a439a91486c6b3f13ed9c087c6c776e6475908952551ca16168f",
+    "codehead/llm/openai.py": "8c642cea3c625e1a3d49ef8a5876c6f5712ec65aa66411b9637fcde66f00e969",
+    "codehead/models/__init__.py": "294cd7c7c9b3e5146f389ba280d02a5d16b4283b301e388cb9d9a08cb95298b9",
+    "codehead/models/_base.py": "d70f0c925838e1524c7a736d3a27e57c5aba2a578857aa570ab92e3a0c7b479b",
+    "codehead/models/event.py": "eeaa46afa15ec8d39f5da8cd0c6a1b4608103f2b7f74117df8540d38b1a71481",
+    "codehead/models/llm.py": "42465f43cf9458970b7f468bbd51f0ba7ecb49a3a7f4928d6e98c53efaac5a67",
+    "codehead/models/message.py": "02cda0907740ae05f683fbfc5c07555a607de1913d6a4b7f9fc0ec90ad1ba191",
+    "codehead/models/tool.py": "1d35b4b4b28e92f35d74bc1c8d18886e3b5107c1c62d44ced05b9ab577be0e21",
+    "codehead/permissions.py": "be14af0e385a317eb38f7aeff4987c5e964fc2a6b163762d41f6180985b3ddb7",
+    "codehead/prompt/__init__.py": "7d71c800944c8cb5db5456bb24ab16e5f0058c9b2d691af6af54898ed4c383af",
+    "codehead/prompt/system.py": "94f931f38fc899d9af7fa7e82155057d0b738c7edac108e0dfe35f6f0d0555ca",
+    "codehead/session/__init__.py": "92c9bdfc6ba057e48659aa67a50d7df9c1730b26e6773b6550317ce9eace7ea8",
+    "codehead/session/history.py": "483985a6a4ebac353098ce1211623b2c1d8324efa193fa576a65a49226bfdf00",
+    "codehead/session/session.py": "97f445249b2bef4dc77ec326c2ee53b47bbf042b28a0648a3deae066a96635ed",
+    "codehead/session/store.py": "dd3769c943bea59b618a6333320b032e77e9ac24ec253cf159bb20c57c52369f",
+    "codehead/tools/__init__.py": "0ab03ef21ce4bda5b47a5dad38b5546a5ca301293efd9b389c71b9ff5d518242",
+    "codehead/tools/_atomic.py": "0a330b9b28fbd1e0e6e06442034d66d0c4debf03ec3316b76d9f6401c2f38877",
+    "codehead/tools/_process_launcher.py": "0d66190c3a4b46cf883a82a43b628cfc5682d0ec9fc90a4e4bc06e9c1c8325a5",
+    "codehead/tools/_windows_job.py": "1cd1ae8c4121b60eab934a8f9a31312476b934f997d73acd4567f8fd870ffcf7",
+    "codehead/tools/base.py": "56667f89c93c1dc39b169a8ce4a034993267d45f2a47b58c77dd0bce4d854a58",
+    "codehead/tools/bash.py": "b4cca0265fc7e8096bf987297c5ae5d437cf394e79a0a0f961e7fb15f30cdfe6",
+    "codehead/tools/edit.py": "290f7c6aabf365fb6d60588e73ddac362ed77d2ed09ceeddb5b8c959e005aa09",
+    "codehead/tools/output.py": "3c1d65f10cf134d3db506d3d168716838ce08e89be556dbca0fd345550e95ed1",
+    "codehead/tools/process.py": "46db1d21c96f4183fd71d628ef08d3c1210e080c7e8a70d3e15349ca35875f7f",
+    "codehead/tools/read.py": "1da1c7586ba67bba5a636e8ca139b29732c4a384cb6922c1c2810817e67555d2",
+    "codehead/tools/registry.py": "1c398a5d28392d588485715520ce206336d2973c20f454d764c70f5b695fbdea",
+    "codehead/tools/runtime.py": "6872cb6f167c08a8c77e27cd70af5698b37475085d3a928b26d464e780a4de19",
+    "codehead/tools/search.py": "f1aafb077e4825ad8dc05f4d9fa10460886fcaadf563bf7372ce244d0ff59002",
+    "codehead/tools/write.py": "a7ce8e4c4db019069bc0337599b836c819f5aadacf5cc58ab39a22e7d9ad9059"
+  },
+  "source_b_sha256": {
+    "codehead/__init__.py": "29c8897ae91ff99902547cab649b80d7f55c011823a5f58ed082ea8ab68ac8f2",
+    "codehead/agent/__init__.py": "3364dbcbea18a6722dbf3f7c8a97a1ccd57e2f42413a919e50d04ad64d9a907d",
+    "codehead/agent/agent.py": "b8c3d156dd458683475f52125a2bfdda43be4daa34d26b14ac903c18c6979e32",
+    "codehead/agent/cancellation.py": "d9ecf24f32db04b035978e6d841785e2a91a07483db444d2d8c79330bbf67697",
+    "codehead/agent/context.py": "4ad37ec1323def2eee4ae26a588f8cf2f1cb62c5cf664be41dd0e429b9725345",
+    "codehead/agent/loop.py": "fff74183ab1ec54db0531412c9f5c44a2aeb44a377d89251dc7ce836e6c8de30",
+    "codehead/cancellation.py": "eded4c3d6b4dc7b293834e6ebe4b741edeb6ba4e2e76b7cf5fba006f52974e26",
+    "codehead/cli.py": "4cea4e2f2c4df70a488a2b61ecb619edbc558fe9e93b1fa9f91332d837cb001a",
+    "codehead/config.py": "082790985c604c0f1213d2e73afd8742dd3ee6d26dfb69515623fa1019c43863",
+    "codehead/config_loader.py": "b28ee085f4b7e770ade3462b6296c7d68351eae42f687cdb08eb543e68379212",
+    "codehead/errors.py": "c8d9a3339e0c35f5fbb28e0a9ecb73beeccad17bc20f67ed3c254da4ea6a4844",
+    "codehead/llm/__init__.py": "fbf2b26e8164683c7109342bab207b95b62a2b836c5c267353ec5547cfaf34fa",
+    "codehead/llm/base.py": "16d180e4b6b5a439a91486c6b3f13ed9c087c6c776e6475908952551ca16168f",
+    "codehead/llm/openai.py": "8c642cea3c625e1a3d49ef8a5876c6f5712ec65aa66411b9637fcde66f00e969",
+    "codehead/models/__init__.py": "294cd7c7c9b3e5146f389ba280d02a5d16b4283b301e388cb9d9a08cb95298b9",
+    "codehead/models/_base.py": "d70f0c925838e1524c7a736d3a27e57c5aba2a578857aa570ab92e3a0c7b479b",
+    "codehead/models/event.py": "eeaa46afa15ec8d39f5da8cd0c6a1b4608103f2b7f74117df8540d38b1a71481",
+    "codehead/models/llm.py": "42465f43cf9458970b7f468bbd51f0ba7ecb49a3a7f4928d6e98c53efaac5a67",
+    "codehead/models/message.py": "02cda0907740ae05f683fbfc5c07555a607de1913d6a4b7f9fc0ec90ad1ba191",
+    "codehead/models/tool.py": "1d35b4b4b28e92f35d74bc1c8d18886e3b5107c1c62d44ced05b9ab577be0e21",
+    "codehead/permissions.py": "be14af0e385a317eb38f7aeff4987c5e964fc2a6b163762d41f6180985b3ddb7",
+    "codehead/prompt/__init__.py": "7d71c800944c8cb5db5456bb24ab16e5f0058c9b2d691af6af54898ed4c383af",
+    "codehead/prompt/system.py": "94f931f38fc899d9af7fa7e82155057d0b738c7edac108e0dfe35f6f0d0555ca",
+    "codehead/session/__init__.py": "92c9bdfc6ba057e48659aa67a50d7df9c1730b26e6773b6550317ce9eace7ea8",
+    "codehead/session/history.py": "483985a6a4ebac353098ce1211623b2c1d8324efa193fa576a65a49226bfdf00",
+    "codehead/session/session.py": "97f445249b2bef4dc77ec326c2ee53b47bbf042b28a0648a3deae066a96635ed",
+    "codehead/session/store.py": "dd3769c943bea59b618a6333320b032e77e9ac24ec253cf159bb20c57c52369f",
+    "codehead/tools/__init__.py": "0ab03ef21ce4bda5b47a5dad38b5546a5ca301293efd9b389c71b9ff5d518242",
+    "codehead/tools/_atomic.py": "0a330b9b28fbd1e0e6e06442034d66d0c4debf03ec3316b76d9f6401c2f38877",
+    "codehead/tools/_process_launcher.py": "0d66190c3a4b46cf883a82a43b628cfc5682d0ec9fc90a4e4bc06e9c1c8325a5",
+    "codehead/tools/_windows_job.py": "1cd1ae8c4121b60eab934a8f9a31312476b934f997d73acd4567f8fd870ffcf7",
+    "codehead/tools/base.py": "56667f89c93c1dc39b169a8ce4a034993267d45f2a47b58c77dd0bce4d854a58",
+    "codehead/tools/bash.py": "135025476c4c861055d0bda4feaf363f78a12098abb68d9f01f4783cfa9d1227",
+    "codehead/tools/edit.py": "290f7c6aabf365fb6d60588e73ddac362ed77d2ed09ceeddb5b8c959e005aa09",
+    "codehead/tools/output.py": "3c1d65f10cf134d3db506d3d168716838ce08e89be556dbca0fd345550e95ed1",
+    "codehead/tools/process.py": "46db1d21c96f4183fd71d628ef08d3c1210e080c7e8a70d3e15349ca35875f7f",
+    "codehead/tools/read.py": "2c423d703140f2000acf4a7445fb7d3c68d59fcdebee52b0b9702d6bb0ee74f8",
+    "codehead/tools/registry.py": "1c398a5d28392d588485715520ce206336d2973c20f454d764c70f5b695fbdea",
+    "codehead/tools/runtime.py": "6872cb6f167c08a8c77e27cd70af5698b37475085d3a928b26d464e780a4de19",
+    "codehead/tools/search.py": "f1aafb077e4825ad8dc05f4d9fa10460886fcaadf563bf7372ce244d0ff59002",
+    "codehead/tools/write.py": "a7ce8e4c4db019069bc0337599b836c819f5aadacf5cc58ab39a22e7d9ad9059"
+  },
+  "final_source_sha256": {
+    "codehead/cancellation.py": "eded4c3d6b4dc7b293834e6ebe4b741edeb6ba4e2e76b7cf5fba006f52974e26",
+    "codehead/cli.py": "4cea4e2f2c4df70a488a2b61ecb619edbc558fe9e93b1fa9f91332d837cb001a",
+    "codehead/config.py": "082790985c604c0f1213d2e73afd8742dd3ee6d26dfb69515623fa1019c43863",
+    "codehead/config_loader.py": "b28ee085f4b7e770ade3462b6296c7d68351eae42f687cdb08eb543e68379212",
+    "codehead/errors.py": "c8d9a3339e0c35f5fbb28e0a9ecb73beeccad17bc20f67ed3c254da4ea6a4844",
+    "codehead/permissions.py": "be14af0e385a317eb38f7aeff4987c5e964fc2a6b163762d41f6180985b3ddb7",
+    "codehead/__init__.py": "29c8897ae91ff99902547cab649b80d7f55c011823a5f58ed082ea8ab68ac8f2",
+    "codehead/agent/agent.py": "b8c3d156dd458683475f52125a2bfdda43be4daa34d26b14ac903c18c6979e32",
+    "codehead/agent/cancellation.py": "d9ecf24f32db04b035978e6d841785e2a91a07483db444d2d8c79330bbf67697",
+    "codehead/agent/context.py": "4ad37ec1323def2eee4ae26a588f8cf2f1cb62c5cf664be41dd0e429b9725345",
+    "codehead/agent/loop.py": "fff74183ab1ec54db0531412c9f5c44a2aeb44a377d89251dc7ce836e6c8de30",
+    "codehead/agent/__init__.py": "3364dbcbea18a6722dbf3f7c8a97a1ccd57e2f42413a919e50d04ad64d9a907d",
+    "codehead/llm/base.py": "16d180e4b6b5a439a91486c6b3f13ed9c087c6c776e6475908952551ca16168f",
+    "codehead/llm/openai.py": "8c642cea3c625e1a3d49ef8a5876c6f5712ec65aa66411b9637fcde66f00e969",
+    "codehead/llm/__init__.py": "fbf2b26e8164683c7109342bab207b95b62a2b836c5c267353ec5547cfaf34fa",
+    "codehead/models/event.py": "eeaa46afa15ec8d39f5da8cd0c6a1b4608103f2b7f74117df8540d38b1a71481",
+    "codehead/models/llm.py": "42465f43cf9458970b7f468bbd51f0ba7ecb49a3a7f4928d6e98c53efaac5a67",
+    "codehead/models/message.py": "02cda0907740ae05f683fbfc5c07555a607de1913d6a4b7f9fc0ec90ad1ba191",
+    "codehead/models/tool.py": "1d35b4b4b28e92f35d74bc1c8d18886e3b5107c1c62d44ced05b9ab577be0e21",
+    "codehead/models/_base.py": "d70f0c925838e1524c7a736d3a27e57c5aba2a578857aa570ab92e3a0c7b479b",
+    "codehead/models/__init__.py": "294cd7c7c9b3e5146f389ba280d02a5d16b4283b301e388cb9d9a08cb95298b9",
+    "codehead/prompt/system.py": "94f931f38fc899d9af7fa7e82155057d0b738c7edac108e0dfe35f6f0d0555ca",
+    "codehead/prompt/__init__.py": "7d71c800944c8cb5db5456bb24ab16e5f0058c9b2d691af6af54898ed4c383af",
+    "codehead/session/history.py": "483985a6a4ebac353098ce1211623b2c1d8324efa193fa576a65a49226bfdf00",
+    "codehead/session/session.py": "97f445249b2bef4dc77ec326c2ee53b47bbf042b28a0648a3deae066a96635ed",
+    "codehead/session/store.py": "dd3769c943bea59b618a6333320b032e77e9ac24ec253cf159bb20c57c52369f",
+    "codehead/session/__init__.py": "92c9bdfc6ba057e48659aa67a50d7df9c1730b26e6773b6550317ce9eace7ea8",
+    "codehead/tools/base.py": "56667f89c93c1dc39b169a8ce4a034993267d45f2a47b58c77dd0bce4d854a58",
+    "codehead/tools/bash.py": "135025476c4c861055d0bda4feaf363f78a12098abb68d9f01f4783cfa9d1227",
+    "codehead/tools/edit.py": "290f7c6aabf365fb6d60588e73ddac362ed77d2ed09ceeddb5b8c959e005aa09",
+    "codehead/tools/output.py": "3c1d65f10cf134d3db506d3d168716838ce08e89be556dbca0fd345550e95ed1",
+    "codehead/tools/process.py": "46db1d21c96f4183fd71d628ef08d3c1210e080c7e8a70d3e15349ca35875f7f",
+    "codehead/tools/read.py": "1da1c7586ba67bba5a636e8ca139b29732c4a384cb6922c1c2810817e67555d2",
+    "codehead/tools/registry.py": "1c398a5d28392d588485715520ce206336d2973c20f454d764c70f5b695fbdea",
+    "codehead/tools/runtime.py": "6872cb6f167c08a8c77e27cd70af5698b37475085d3a928b26d464e780a4de19",
+    "codehead/tools/search.py": "f1aafb077e4825ad8dc05f4d9fa10460886fcaadf563bf7372ce244d0ff59002",
+    "codehead/tools/write.py": "a7ce8e4c4db019069bc0337599b836c819f5aadacf5cc58ab39a22e7d9ad9059",
+    "codehead/tools/_atomic.py": "0a330b9b28fbd1e0e6e06442034d66d0c4debf03ec3316b76d9f6401c2f38877",
+    "codehead/tools/_process_launcher.py": "0d66190c3a4b46cf883a82a43b628cfc5682d0ec9fc90a4e4bc06e9c1c8325a5",
+    "codehead/tools/_windows_job.py": "1cd1ae8c4121b60eab934a8f9a31312476b934f997d73acd4567f8fd870ffcf7",
+    "codehead/tools/__init__.py": "0ab03ef21ce4bda5b47a5dad38b5546a5ca301293efd9b389c71b9ff5d518242"
+  },
+  "final_source_differs_from_candidate": [
+    "codehead/tools/read.py"
+  ],
+  "task_spec_sha256": {
+    "004": "23dccbd43d7403481bee860b5284f27c82c51c74689c0f2dfa2dbff53d702cdc",
+    "008": "6edbb440ad79fad787d6a6ac4d6db26df7210b5b94b2ac76bf32301ea919fb62",
+    "010": "da0808b5411ce9061559636a52ed053225799ae8414f5689240d7f95afb8c159"
+  },
+  "execution_order": [
+    "004-A-1",
+    "004-B-1",
+    "004-B-2",
+    "004-A-2",
+    "004-A-3",
+    "004-B-3",
+    "008-A-1",
+    "008-B-1",
+    "008-B-2",
+    "008-A-2",
+    "008-A-3",
+    "008-B-3",
+    "010-A-1",
+    "010-B-1",
+    "010-B-2",
+    "010-A-2",
+    "010-A-3",
+    "010-B-3",
+    "004-B-4",
+    "004-A-4"
+  ],
+  "attempts": 20,
+  "comparative_attempts": 18,
+  "noncomparative_attempts": {
+    "004-A-1": "connection timeout before any complete response",
+    "004-B-1": "evaluator interrupted after service recovered"
+  },
+  "totals": {
+    "observed_input_tokens": 1779311,
+    "observed_output_tokens": 78570,
+    "requests_without_usage": 1,
+    "normal_requests": 313,
+    "summary_requests": 24,
+    "agent_wall_s": 600.937
+  },
+  "wall_time_note": "Evaluator-interrupted attempt uses last observed event elapsed time; aggregate is a lower bound.",
+  "groups": [
+    {
+      "task": "004",
+      "variant": "A",
+      "runs": 3,
+      "passed": 0,
+      "normal_requests": {
+        "median": 13,
+        "min": 13,
+        "max": 20
+      },
+      "input_tokens": {
+        "median": 71819,
+        "min": 64726,
+        "max": 138803
+      },
+      "output_tokens": {
+        "median": 5943,
+        "min": 5887,
+        "max": 6260
+      },
+      "redundant_note_reads": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "tool_failed": 9,
+      "compactions": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task": "004",
+      "variant": "B",
+      "runs": 3,
+      "passed": 2,
+      "normal_requests": {
+        "median": 11,
+        "min": 7,
+        "max": 20
+      },
+      "input_tokens": {
+        "median": 53353,
+        "min": 24698,
+        "max": 165308
+      },
+      "output_tokens": {
+        "median": 5233,
+        "min": 3940,
+        "max": 7067
+      },
+      "redundant_note_reads": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "tool_failed": 6,
+      "compactions": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task": "008",
+      "variant": "A",
+      "runs": 3,
+      "passed": 3,
+      "normal_requests": {
+        "median": 11,
+        "min": 10,
+        "max": 15
+      },
+      "input_tokens": {
+        "median": 37526,
+        "min": 34039,
+        "max": 66265
+      },
+      "output_tokens": {
+        "median": 2055,
+        "min": 1742,
+        "max": 3053
+      },
+      "redundant_note_reads": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "tool_failed": 5,
+      "compactions": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task": "008",
+      "variant": "B",
+      "runs": 3,
+      "passed": 3,
+      "normal_requests": {
+        "median": 12,
+        "min": 11,
+        "max": 13
+      },
+      "input_tokens": {
+        "median": 49307,
+        "min": 40886,
+        "max": 65000
+      },
+      "output_tokens": {
+        "median": 3174,
+        "min": 2319,
+        "max": 3672
+      },
+      "redundant_note_reads": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "tool_failed": 6,
+      "compactions": [
+        0,
+        0,
+        0
+      ]
+    },
+    {
+      "task": "010",
+      "variant": "A",
+      "runs": 3,
+      "passed": 3,
+      "normal_requests": {
+        "median": 25,
+        "min": 23,
+        "max": 25
+      },
+      "input_tokens": {
+        "median": 155132,
+        "min": 146186,
+        "max": 156610
+      },
+      "output_tokens": {
+        "median": 3949,
+        "min": 3682,
+        "max": 4621
+      },
+      "redundant_note_reads": {
+        "median": 0,
+        "min": 0,
+        "max": 2
+      },
+      "tool_failed": 0,
+      "compactions": [
+        4,
+        4,
+        4
+      ]
+    },
+    {
+      "task": "010",
+      "variant": "B",
+      "runs": 3,
+      "passed": 3,
+      "normal_requests": {
+        "median": 23,
+        "min": 22,
+        "max": 27
+      },
+      "input_tokens": {
+        "median": 144641,
+        "min": 135234,
+        "max": 159666
+      },
+      "output_tokens": {
+        "median": 4140,
+        "min": 3454,
+        "max": 4212
+      },
+      "redundant_note_reads": {
+        "median": 0,
+        "min": 0,
+        "max": 0
+      },
+      "tool_failed": 0,
+      "compactions": [
+        4,
+        4,
+        4
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "attempt": "004-A-1",
+      "task": "004",
+      "variant": "A",
+      "repeat": 1,
+      "status": "service_blocked",
+      "exit_code": 1,
+      "task_validation_status": "failed",
+      "harness_status": "service_failure",
+      "wall_time_s": 6.906,
+      "normal_requests": 1,
+      "summary_requests": 0,
+      "turn_steps": [
+        1
+      ],
+      "input_tokens": 0,
+      "output_tokens": 0,
+      "requests_without_usage": 1,
+      "tool_calls": 0,
+      "tool_failed": 0,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 2,
+      "checks_total": 24,
+      "comparative": false,
+      "failure_reason": "connect_timeout",
+      "tool_failure_categories": [],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": false,
+      "agent_report_fully_accurate": null,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 1
+    },
+    {
+      "attempt": "004-B-1",
+      "task": "004",
+      "variant": "B",
+      "repeat": 1,
+      "status": "evaluator_interrupted",
+      "exit_code": null,
+      "task_validation_status": "not_validated",
+      "harness_status": "evaluator_interrupted",
+      "wall_time_s": 23.829,
+      "normal_requests": 11,
+      "summary_requests": 0,
+      "turn_steps": [
+        11
+      ],
+      "input_tokens": 70112,
+      "output_tokens": 4167,
+      "requests_without_usage": 0,
+      "tool_calls": 16,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 0,
+      "checks_total": 0,
+      "comparative": false,
+      "failure_reason": "scheduler stopped an already recovered request stream",
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_1e6xkTogtq5CrsiBLa3I6973",
+          "category": "expected_negative_cli_validation",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": false,
+      "agent_report_fully_accurate": null,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": null
+    },
+    {
+      "attempt": "004-B-2",
+      "task": "004",
+      "variant": "B",
+      "repeat": 2,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 20.062,
+      "normal_requests": 7,
+      "summary_requests": 0,
+      "turn_steps": [
+        7
+      ],
+      "input_tokens": 24698,
+      "output_tokens": 3940,
+      "requests_without_usage": 0,
+      "tool_calls": 12,
+      "tool_failed": 0,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 24,
+      "checks_total": 24,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [],
+      "semantic_grading_correction": true,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 18
+    },
+    {
+      "attempt": "004-A-2",
+      "task": "004",
+      "variant": "A",
+      "repeat": 2,
+      "status": "failed",
+      "exit_code": 0,
+      "task_validation_status": "failed",
+      "harness_status": "completed",
+      "wall_time_s": 31.609,
+      "normal_requests": 13,
+      "summary_requests": 0,
+      "turn_steps": [
+        13
+      ],
+      "input_tokens": 64726,
+      "output_tokens": 5943,
+      "requests_without_usage": 0,
+      "tool_calls": 16,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 23,
+      "checks_total": 24,
+      "comparative": true,
+      "failure_reason": "先验证文件值类型，再应用环境覆盖；非法字符串文件值即使被有效环境值覆盖仍报错，违反先合并再校验。",
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_LLGPRUECAoDoayDXJmnb3955",
+          "category": "expected_negative_cli_validation",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": false,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 23
+    },
+    {
+      "attempt": "004-A-3",
+      "task": "004",
+      "variant": "A",
+      "repeat": 3,
+      "status": "failed",
+      "exit_code": 1,
+      "task_validation_status": "passed",
+      "harness_status": "turn_failed",
+      "wall_time_s": 39.829,
+      "normal_requests": 20,
+      "summary_requests": 0,
+      "turn_steps": [
+        20
+      ],
+      "input_tokens": 138803,
+      "output_tokens": 6260,
+      "requests_without_usage": 0,
+      "tool_calls": 27,
+      "tool_failed": 5,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 24,
+      "checks_total": 24,
+      "comparative": true,
+      "failure_reason": "新增测试误把允许的周边空白当作非法输入，反复修正后最终独立测试通过，但已耗尽20步、未产生最终答复。",
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_BBv8duCiMC3cs55oOVzb5613",
+          "category": "model_generated_incorrect_tests",
+          "replacement_characters_in_output": true
+        },
+        {
+          "tool_call_id": "call_01_tLuZpR1JeHD5jUgDUEkA3545",
+          "category": "model_generated_incorrect_tests",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_00_uilb2N43ZPlnIbF8loff1661",
+          "category": "model_generated_incorrect_tests",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_00_sJGRqbThGfh1yQyxHFzS5007",
+          "category": "model_generated_incorrect_tests",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_00_yY774sxOhDGHxQcQf20i8669",
+          "category": "model_generated_incorrect_tests",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": true,
+      "agent_verification_claims_reviewed": false,
+      "agent_report_fully_accurate": null,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 25
+    },
+    {
+      "attempt": "004-B-3",
+      "task": "004",
+      "variant": "B",
+      "repeat": 3,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 27.047,
+      "normal_requests": 11,
+      "summary_requests": 0,
+      "turn_steps": [
+        11
+      ],
+      "input_tokens": 53353,
+      "output_tokens": 5233,
+      "requests_without_usage": 0,
+      "tool_calls": 16,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 24,
+      "checks_total": 24,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_fDiE3Yu9NNOswN2Nuh225986",
+          "category": "expected_negative_cli_validation",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": true,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 20
+    },
+    {
+      "attempt": "008-A-1",
+      "task": "008",
+      "variant": "A",
+      "repeat": 1,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 18.672,
+      "normal_requests": 11,
+      "summary_requests": 0,
+      "turn_steps": [
+        11
+      ],
+      "input_tokens": 37526,
+      "output_tokens": 2055,
+      "requests_without_usage": 0,
+      "tool_calls": 15,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_hwTWTDTkLJ8byNXCAYBp8646",
+          "category": "model_assumed_git_repository",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 3
+    },
+    {
+      "attempt": "008-B-1",
+      "task": "008",
+      "variant": "B",
+      "repeat": 1,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 26.438,
+      "normal_requests": 12,
+      "summary_requests": 0,
+      "turn_steps": [
+        12
+      ],
+      "input_tokens": 65000,
+      "output_tokens": 3672,
+      "requests_without_usage": 0,
+      "tool_calls": 15,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_4sn9EFqaEs02Nfuxskdl0676",
+          "category": "model_assumed_git_repository",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 3
+    },
+    {
+      "attempt": "008-B-2",
+      "task": "008",
+      "variant": "B",
+      "repeat": 2,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 19.734,
+      "normal_requests": 11,
+      "summary_requests": 0,
+      "turn_steps": [
+        11
+      ],
+      "input_tokens": 40886,
+      "output_tokens": 2319,
+      "requests_without_usage": 0,
+      "tool_calls": 12,
+      "tool_failed": 4,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_5cPwFWaxkk6pbB5hOqT20429",
+          "category": "model_assumed_git_repository",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_01_Bkr2cpv9aIFcPvpzHHZ34801",
+          "category": "model_read_directory",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_00_Xh4xh4Bj9jc86Vw0A2BQ1451",
+          "category": "model_text_anchor_check",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_00_cYTRswAEtHfGWoUtrjHX2076",
+          "category": "model_assumed_git_repository",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 3
+    },
+    {
+      "attempt": "008-A-2",
+      "task": "008",
+      "variant": "A",
+      "repeat": 2,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 16.703,
+      "normal_requests": 10,
+      "summary_requests": 0,
+      "turn_steps": [
+        10
+      ],
+      "input_tokens": 34039,
+      "output_tokens": 1742,
+      "requests_without_usage": 0,
+      "tool_calls": 13,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_oG0Sn9dZLz07JlkJlh8L8505",
+          "category": "model_used_bash_syntax_in_powershell",
+          "replacement_characters_in_output": true
+        }
+      ],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 3
+    },
+    {
+      "attempt": "008-A-3",
+      "task": "008",
+      "variant": "A",
+      "repeat": 3,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 30.047,
+      "normal_requests": 15,
+      "summary_requests": 0,
+      "turn_steps": [
+        15
+      ],
+      "input_tokens": 66265,
+      "output_tokens": 3053,
+      "requests_without_usage": 0,
+      "tool_calls": 21,
+      "tool_failed": 3,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_jCRPCLnaj1KOhKNez0bY8673",
+          "category": "shell_module_environment",
+          "replacement_characters_in_output": true
+        },
+        {
+          "tool_call_id": "call_00_Zrpb6ntkfESLpmOFqcO71743",
+          "category": "model_used_bash_syntax_in_powershell",
+          "replacement_characters_in_output": true
+        },
+        {
+          "tool_call_id": "call_00_LtfbeRTiVfuGuvxF5KIp6064",
+          "category": "model_path_outside_workspace",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 3
+    },
+    {
+      "attempt": "008-B-3",
+      "task": "008",
+      "variant": "B",
+      "repeat": 3,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 29.281,
+      "normal_requests": 13,
+      "summary_requests": 0,
+      "turn_steps": [
+        13
+      ],
+      "input_tokens": 49307,
+      "output_tokens": 3174,
+      "requests_without_usage": 0,
+      "tool_calls": 14,
+      "tool_failed": 1,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 6,
+      "checks_total": 6,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_XcsmA911OvHLBy8QBnLx0004",
+          "category": "model_text_anchor_check",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 3
+    },
+    {
+      "attempt": "010-A-1",
+      "task": "010",
+      "variant": "A",
+      "repeat": 1,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 39.297,
+      "normal_requests": 23,
+      "summary_requests": 4,
+      "turn_steps": [
+        1,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        6
+      ],
+      "input_tokens": 146186,
+      "output_tokens": 4621,
+      "requests_without_usage": 0,
+      "tool_calls": 14,
+      "tool_failed": 0,
+      "tool_denied": 0,
+      "compactions": 4,
+      "redundant_note_reads": 0,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": true,
+      "public_tests_run": 10
+    },
+    {
+      "attempt": "010-B-1",
+      "task": "010",
+      "variant": "B",
+      "repeat": 1,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 37.015,
+      "normal_requests": 22,
+      "summary_requests": 4,
+      "turn_steps": [
+        1,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        5
+      ],
+      "input_tokens": 135234,
+      "output_tokens": 3454,
+      "requests_without_usage": 0,
+      "tool_calls": 14,
+      "tool_failed": 0,
+      "tool_denied": 0,
+      "compactions": 4,
+      "redundant_note_reads": 0,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": true,
+      "public_tests_run": 7
+    },
+    {
+      "attempt": "010-B-2",
+      "task": "010",
+      "variant": "B",
+      "repeat": 2,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 42.359,
+      "normal_requests": 27,
+      "summary_requests": 4,
+      "turn_steps": [
+        1,
+        3,
+        3,
+        3,
+        3,
+        3,
+        2,
+        2,
+        2,
+        5
+      ],
+      "input_tokens": 159666,
+      "output_tokens": 4140,
+      "requests_without_usage": 0,
+      "tool_calls": 19,
+      "tool_failed": 0,
+      "tool_denied": 0,
+      "compactions": 4,
+      "redundant_note_reads": 0,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": true,
+      "public_tests_run": 8
+    },
+    {
+      "attempt": "010-A-2",
+      "task": "010",
+      "variant": "A",
+      "repeat": 2,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 39.797,
+      "normal_requests": 25,
+      "summary_requests": 4,
+      "turn_steps": [
+        1,
+        2,
+        2,
+        3,
+        3,
+        2,
+        2,
+        2,
+        2,
+        6
+      ],
+      "input_tokens": 155132,
+      "output_tokens": 3682,
+      "requests_without_usage": 0,
+      "tool_calls": 17,
+      "tool_failed": 0,
+      "tool_denied": 0,
+      "compactions": 4,
+      "redundant_note_reads": 0,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": true,
+      "public_tests_run": 9
+    },
+    {
+      "attempt": "010-A-3",
+      "task": "010",
+      "variant": "A",
+      "repeat": 3,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 38.25,
+      "normal_requests": 25,
+      "summary_requests": 4,
+      "turn_steps": [
+        1,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        2,
+        2,
+        6
+      ],
+      "input_tokens": 156610,
+      "output_tokens": 3949,
+      "requests_without_usage": 0,
+      "tool_calls": 17,
+      "tool_failed": 0,
+      "tool_denied": 0,
+      "compactions": 4,
+      "redundant_note_reads": 2,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": true,
+      "public_tests_run": 9
+    },
+    {
+      "attempt": "010-B-3",
+      "task": "010",
+      "variant": "B",
+      "repeat": 3,
+      "status": "passed",
+      "exit_code": 0,
+      "task_validation_status": "passed",
+      "harness_status": "completed",
+      "wall_time_s": 37.562,
+      "normal_requests": 23,
+      "summary_requests": 4,
+      "turn_steps": [
+        1,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        6
+      ],
+      "input_tokens": 144641,
+      "output_tokens": 4212,
+      "requests_without_usage": 0,
+      "tool_calls": 15,
+      "tool_failed": 0,
+      "tool_denied": 0,
+      "compactions": 4,
+      "redundant_note_reads": 0,
+      "checks_passed": 8,
+      "checks_total": 8,
+      "comparative": true,
+      "failure_reason": null,
+      "tool_failure_categories": [],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": true,
+      "first_user_removed_in_all_checkpoints": true,
+      "public_tests_run": 10
+    },
+    {
+      "attempt": "004-B-4",
+      "task": "004",
+      "variant": "B",
+      "repeat": 4,
+      "status": "failed",
+      "exit_code": 1,
+      "task_validation_status": "failed",
+      "harness_status": "turn_failed",
+      "wall_time_s": 43.891,
+      "normal_requests": 20,
+      "summary_requests": 0,
+      "turn_steps": [
+        20
+      ],
+      "input_tokens": 165308,
+      "output_tokens": 7067,
+      "requests_without_usage": 0,
+      "tool_calls": 28,
+      "tool_failed": 5,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 20,
+      "checks_total": 24,
+      "comparative": true,
+      "failure_reason": "在修正文件值合并/校验时留下非法文件值被接受的缺陷，新增测试仍失败，并耗尽20步。",
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_zdE8u07LFRnmpL95Xcrd2450",
+          "category": "model_tool_schema_arguments",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_00_AHvltl1hMec9GIli5UQJ3332",
+          "category": "model_implementation_failed_tests",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_00_sI8eOkAEA1BvH40wA1NP9416",
+          "category": "model_implementation_failed_tests",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_00_1cvY4AfPMkY51wfWHQIy7474",
+          "category": "model_implementation_failed_tests",
+          "replacement_characters_in_output": false
+        },
+        {
+          "tool_call_id": "call_00_RUosslkaUwVBDLyaV2zf7287",
+          "category": "model_edit_matching",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": false,
+      "agent_verification_claims_reviewed": false,
+      "agent_report_fully_accurate": null,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 22
+    },
+    {
+      "attempt": "004-A-4",
+      "task": "004",
+      "variant": "A",
+      "repeat": 4,
+      "status": "failed",
+      "exit_code": 0,
+      "task_validation_status": "failed",
+      "harness_status": "completed",
+      "wall_time_s": 32.609,
+      "normal_requests": 13,
+      "summary_requests": 0,
+      "turn_steps": [
+        13
+      ],
+      "input_tokens": 71819,
+      "output_tokens": 5887,
+      "requests_without_usage": 0,
+      "tool_calls": 17,
+      "tool_failed": 3,
+      "tool_denied": 0,
+      "compactions": 0,
+      "redundant_note_reads": 0,
+      "checks_passed": 23,
+      "checks_total": 24,
+      "comparative": true,
+      "failure_reason": "文件值类型在环境覆盖前被验证，未满足先合并再校验；最终报告对此行为的概括不准确。",
+      "tool_failure_categories": [
+        {
+          "tool_call_id": "call_00_i8mZmIxPp7ymdYafqOSV1526",
+          "category": "model_used_bash_syntax_in_powershell",
+          "replacement_characters_in_output": true
+        },
+        {
+          "tool_call_id": "call_00_TFBS2UYGULeVY0eg1pgL4870",
+          "category": "expected_negative_cli_validation",
+          "replacement_characters_in_output": true
+        },
+        {
+          "tool_call_id": "call_00_xnOQVu3DI2IAZNdtjJUX8426",
+          "category": "expected_negative_extra_type_validation",
+          "replacement_characters_in_output": false
+        }
+      ],
+      "semantic_grading_correction": true,
+      "agent_verification_claims_reviewed": true,
+      "agent_report_fully_accurate": false,
+      "first_user_removed_in_all_checkpoints": null,
+      "public_tests_run": 25
+    }
+  ],
+  "decision": {
+    "retain_shell_fix": true,
+    "retain_eof_feedback": false,
+    "criterion": "no lower pass count per task, 010 B passes 3/3, and median redundant note reads strictly lower"
+  },
+  "final_local_validation": {
+    "pytest_passed": 400,
+    "pytest_skipped": 1,
+    "ruff_check": "passed",
+    "ruff_format_check": "passed",
+    "git_diff_check": "passed"
+  },
+  "limitations": [
+    "three repetitions per task/variant do not establish statistical significance",
+    "combined changes do not isolate the effect of EOF feedback",
+    "service timeout and evaluator interruption excluded from paired comparison but all known usage retained",
+    "no real Unix host validation"
+  ]
+}

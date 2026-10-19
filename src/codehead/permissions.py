@@ -41,6 +41,16 @@ class PermissionPolicy:
         )
 
     @classmethod
+    def allow_all(
+        cls, workspace: Path, known_tools: Iterable[str]
+    ) -> "PermissionPolicy":
+        """Grant every known tool without prompting; for unattended runs only."""
+        return cls(
+            workspace,
+            [PermissionRule(tool=name, action="allow") for name in known_tools],
+        )
+
+    @classmethod
     def from_file(
         cls, workspace: Path, known_tools: Iterable[str]
     ) -> "PermissionPolicy":

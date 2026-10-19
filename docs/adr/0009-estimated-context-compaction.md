@@ -1,6 +1,6 @@
 # 0009. 估算驱动的阈值自动压缩
 
-- 状态：Accepted
+- 状态：Superseded by [0019](0019-default-context-budget.md)
 - 日期：2026-09-23
 - 来源：`7faa835` 上下文自动压缩与 SQLite 历史存档
 

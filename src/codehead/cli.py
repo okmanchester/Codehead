@@ -8,6 +8,7 @@ import sys
 import threading
 from collections.abc import Callable
 from contextlib import aclosing
+from typing import TextIO
 
 from rich.console import Console
 from rich.text import Text
@@ -16,7 +17,13 @@ from codehead.agent import Agent, AgentLoop
 from codehead.cancellation import settle
 from codehead.config import RuntimeConfig
 from codehead.config_loader import load_local_config, load_runtime_config
-from codehead.errors import CodeheadError, ResumeError, StorageError, ToolCleanupError
+from codehead.errors import (
+    AgentAbortedError,
+    CodeheadError,
+    ResumeError,
+    StorageError,
+    ToolCleanupError,
+)
 from codehead.llm import OpenAIProvider
 from codehead.models import (
     AssistantTextDelta,
@@ -24,10 +31,12 @@ from codehead.models import (
     ContextCompactionStarted,
     ModelCompleted,
     SystemMessage,
+    TokenUsage,
     ToolApprovalRequested,
     ToolCompleted,
     ToolStarted,
     TurnCancelled,
+    TurnCompleted,
 )
 from codehead.permissions import ApprovalChoice, PermissionPolicy
 from codehead.prompt import build_system_prompt
@@ -44,7 +53,9 @@ from codehead.tools import (
 from codehead.tools.search import find_ripgrep
 
 
-def build_agent_loop(config: RuntimeConfig) -> AgentLoop:
+def build_agent_loop(
+    config: RuntimeConfig, *, allow_all_tools: bool = False
+) -> AgentLoop:
     """Construct the v0.1 agent and its built-in tools."""
     rg_executable = find_ripgrep()
     tools = ToolRegistry(
@@ -57,8 +68,11 @@ def build_agent_loop(config: RuntimeConfig) -> AgentLoop:
             BashTool(config.workspace),
         ]
     )
-    policy = PermissionPolicy.from_file(
-        config.workspace, (definition.name for definition in tools.definitions())
+    names = (definition.name for definition in tools.definitions())
+    policy = (
+        PermissionPolicy.allow_all(config.workspace, names)
+        if allow_all_tools
+        else PermissionPolicy.from_file(config.workspace, names)
     )
     provider = OpenAIProvider(
         model=config.model,
@@ -277,6 +291,84 @@ def _finish_session(session: Session, console: Console) -> int:
     return 0
 
 
+def _add_usage(total: TokenUsage | None, usage: TokenUsage | None) -> TokenUsage | None:
+    if usage is None:
+        return total
+    if total is None:
+        return usage
+    return TokenUsage(
+        input_tokens=total.input_tokens + usage.input_tokens,
+        output_tokens=total.output_tokens + usage.output_tokens,
+        total_tokens=total.total_tokens + usage.total_tokens,
+    )
+
+
+async def _consume_print_turn(
+    loop: AgentLoop, session: Session, user_input: str, console: Console
+) -> tuple[str, TokenUsage | None]:
+    """Run one turn without rendering deltas; return its answer and total usage."""
+    answer: str | None = None
+    usage: TokenUsage | None = None
+    async with aclosing(loop.stream(session, user_input)) as events:
+        async for event in events:
+            if isinstance(event, ModelCompleted):
+                usage = _add_usage(usage, event.response.usage)
+            elif isinstance(event, TurnCompleted):
+                answer = event.answer
+            elif isinstance(event, ContextCompactionStarted):
+                console.print(
+                    Text(f"Context> compacting (~{event.before_tokens} input tokens)")
+                )
+            elif isinstance(event, ContextCompacted):
+                console.print(
+                    Text(
+                        f"Context> compacted: ~{event.before_tokens} -> "
+                        f"~{event.after_tokens} input tokens"
+                    )
+                )
+            elif isinstance(event, ToolStarted):
+                console.print(Text(f"Tool> {event.tool_call.name}: started"))
+            elif isinstance(event, ToolApprovalRequested):
+                console.print(Text(f"Tool> {event.tool_call.name}: approval required"))
+            elif isinstance(event, ToolCompleted):
+                name = event.tool_name or event.result.tool_call_id
+                console.print(Text(f"Tool> {name}: {event.result.outcome}"))
+    if answer is None:
+        raise AgentAbortedError("Agent stream ended without a final answer")
+    return answer, usage
+
+
+async def run_print(
+    loop: AgentLoop,
+    session: Session,
+    prompt: str,
+    *,
+    console: Console,
+    out: TextIO | None = None,
+) -> int:
+    """Run one turn without the REPL; write only the final answer to stdout."""
+    writer = out if out is not None else sys.stdout
+    try:
+        answer, usage = await _consume_print_turn(loop, session, prompt, console)
+    except KeyboardInterrupt:
+        console.print(Text("Interrupted", style="bold red"))
+        return 1
+    except CodeheadError as exc:
+        console.print(Text(f"Error: {exc}", style="bold red"))
+        return 1
+    writer.write(answer)
+    writer.write("\n")
+    writer.flush()
+    if usage is not None:
+        console.print(
+            Text(
+                f"[codehead] usage input={usage.input_tokens} "
+                f"output={usage.output_tokens} total={usage.total_tokens}"
+            )
+        )
+    return _finish_session(session, console)
+
+
 def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="codehead")
     modes = parser.add_mutually_exclusive_group()
@@ -288,7 +380,24 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
     modes.add_argument(
         "--resume", metavar="ID", help="Resume a normally closed session by its full ID"
     )
-    return parser.parse_args(argv)
+    modes.add_argument(
+        "-p",
+        "--print",
+        dest="print_prompt",
+        nargs="?",
+        const="",
+        metavar="PROMPT",
+        help="Run one turn without the REPL; read the prompt from stdin when omitted",
+    )
+    parser.add_argument(
+        "--allow-all-tools",
+        action="store_true",
+        help="Grant every tool without prompting; requires --print",
+    )
+    args = parser.parse_args(argv)
+    if args.allow_all_tools and args.print_prompt is None:
+        parser.error("--allow-all-tools requires --print")
+    return args
 
 
 def _list_sessions(console: Console) -> int:
@@ -322,51 +431,69 @@ def _list_sessions(console: Console) -> int:
     return 0
 
 
+def _open_session(
+    config: RuntimeConfig,
+    store: SQLiteSessionStore,
+    resume_id: str | None,
+    console: Console,
+) -> Session:
+    """Resume a normally closed session, or start a new one."""
+    if resume_id is None:
+        session = Session(
+            store=store,
+            workspace=str(config.workspace),
+            model=config.model,
+            base_url=config.base_url,
+        )
+        console.print(Text(f"New session: {session.id}"))
+        return session
+    current_prompt = build_system_prompt(config.workspace)
+    session = Session.resume(
+        resume_id,
+        store=store,
+        workspace=str(config.workspace),
+        model=config.model,
+        base_url=config.base_url,
+    )
+    console.print(Text(f"Resumed session: {session.id}"))
+    if session.model_changed:
+        console.print(
+            "Model or endpoint changed; using current configuration and resetting token calibration."
+        )
+    saved_prompts = [
+        m.content for m in session.messages if isinstance(m, SystemMessage)
+    ]
+    if saved_prompts and saved_prompts != [current_prompt]:
+        console.print(
+            "System instructions changed; continuing with the archived instructions. Start a new session to use the current instructions."
+        )
+    return session
+
+
 async def _main(argv: list[str] | None = None) -> int:
-    """Load configuration and start the interactive CLI."""
-    console = Console()
+    """Load configuration and start the interactive or single-turn CLI."""
     args = _parse_args(argv or [])
+    # In print mode every human-facing message goes to stderr so stdout stays clean.
+    console = Console(stderr=args.print_prompt is not None)
     if args.list_sessions:
         return _list_sessions(console)
     try:
         config = load_runtime_config()
-        loop = build_agent_loop(config)
+        loop = build_agent_loop(config, allow_all_tools=args.allow_all_tools)
     except (CodeheadError, ValueError, TypeError) as exc:
         console.print(Text(f"Error: {exc}", style="bold red"))
         return 1
     try:
         store = SQLiteSessionStore(config.session_db_path)
         try:
-            if args.resume is not None:
-                current_prompt = build_system_prompt(config.workspace)
-                session = Session.resume(
-                    args.resume,
-                    store=store,
-                    workspace=str(config.workspace),
-                    model=config.model,
-                    base_url=config.base_url,
-                )
-                console.print(Text(f"Resumed session: {session.id}"))
-                if session.model_changed:
-                    console.print(
-                        "Model or endpoint changed; using current configuration and resetting token calibration."
-                    )
-                saved_prompts = [
-                    m.content for m in session.messages if isinstance(m, SystemMessage)
-                ]
-                if saved_prompts and saved_prompts != [current_prompt]:
-                    console.print(
-                        "System instructions changed; continuing with the archived instructions. Start a new session to use the current instructions."
-                    )
-            else:
-                session = Session(
-                    store=store,
-                    workspace=str(config.workspace),
-                    model=config.model,
-                    base_url=config.base_url,
-                )
-                console.print(Text(f"New session: {session.id}"))
-            return await run_repl(loop, console=console, session=session)
+            session = _open_session(config, store, args.resume, console)
+            if args.print_prompt is None:
+                return await run_repl(loop, console=console, session=session)
+            prompt = args.print_prompt or sys.stdin.read()
+            if not prompt.strip():
+                console.print(Text("Error: empty prompt", style="bold red"))
+                return 1
+            return await run_print(loop, session, prompt, console=console)
         finally:
             store.close()
     except (ResumeError, StorageError) as exc:
@@ -376,8 +503,17 @@ async def _main(argv: list[str] | None = None) -> int:
         await loop.aclose()
 
 
+def _configure_utf8_stdio() -> None:
+    """Bind the standard streams to UTF-8 so piped text is not locale-encoded."""
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
+
+
 def main() -> int:
     """Own one event loop for the entire CLI session."""
+    _configure_utf8_stdio()
     try:
         return asyncio.run(_main(sys.argv[1:]))
     except KeyboardInterrupt:

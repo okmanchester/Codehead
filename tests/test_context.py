@@ -38,7 +38,7 @@ from codehead.models import (
 )
 from codehead.permissions import ApprovalChoice, PermissionPolicy
 from codehead.session import Session, SQLiteSessionStore
-from codehead.tools import Tool, ToolRegistry
+from codehead.tools import ReadTool, Tool, ToolRegistry
 
 
 async def approve_once(call: ToolCall) -> ApprovalChoice:
@@ -103,6 +103,39 @@ def test_under_threshold_preserves_context_and_makes_no_summary_call(store):
     assert session.messages == before
     assert provider.calls == []
     assert checkpoint_count(store) == 0
+
+
+def test_default_budget_compacts_without_dropping_a_large_read_page(store, tmp_path):
+    path = tmp_path / "large.txt"
+    path.write_text(("x" * 1900 + "\n") * 100, encoding="utf-8")
+    read = ReadTool(tmp_path)
+    output = read.execute({"path": path.name})
+    assert len(output.encode()) > 39 * 1024
+
+    session = Session([SystemMessage(content="original instructions")], store=store)
+    for _ in range(12):
+        session.add(UserMessage(content="old question " + "x" * 4000))
+        session.add(AssistantMessage(content="old answer " + "y" * 4000))
+    session.add(UserMessage(content="Inspect this file and continue."))
+    call = ToolCall(id="read-page", name="read", arguments={"path": path.name})
+    session.add(AssistantMessage(tool_calls=(call,)))
+    result = ToolMessage(tool_call_id=call.id, content=output)
+    session.add(result)
+    tools = (read.definition(),)
+    provider = SummaryProvider()
+    manager = ContextManager(provider)
+    assert estimate_tokens(LLMRequest(messages=session.messages, tools=tools)) >= (
+        manager.budget * 0.75
+    )
+
+    events = asyncio.run(prepare(manager, session, tools))
+
+    assert isinstance(events[-1], ContextCompacted)
+    assert events[-1].after_tokens <= manager.budget * 0.5
+    assert provider.calls
+    assert session.messages[-2] == AssistantMessage(tool_calls=(call,))
+    assert session.messages[-1] == result
+    assert checkpoint_count(store) == 1
 
 
 def test_incremental_batched_compaction_archives_originals_without_reloading(store):
