@@ -1,0 +1,7 @@
+interface:
+  display_name: "Task Cleanup"
+  short_description: "开发任务结束后检查仓库差异、清理临时产物，并维护文件保留边界"
+  default_prompt: "使用 $task-cleanup 检查本任务的文件差异与临时产物，清理已授权且可重建的文件，维护忽略规则，并报告实际验证结果。"
+
+policy:
+  allow_implicit_invocation: true

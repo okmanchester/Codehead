@@ -27,3 +27,7 @@ env/
 .pytest_cache/
 .pytest_tmp/
 .ruff_cache/
+
+# Local evaluation runs
+
+/docs/evaluation/runs/
