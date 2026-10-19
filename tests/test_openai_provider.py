@@ -48,6 +48,20 @@ class FakeStream:
         return chunk
 
 
+@pytest.mark.parametrize("limit", [8192, 1])
+def test_provider_optional_output_limit(limit):
+    client = make_client(chat_response(content="done"))
+    provider = OpenAIProvider("test", "secret", max_output_tokens=limit, client=client)
+    asyncio.run(provider.complete(LLMRequest(messages=(UserMessage(content="hello"),))))
+    assert client.chat.completions.create.call_args.kwargs["max_tokens"] == limit
+
+
+@pytest.mark.parametrize("limit", [0, -1, True, "8192"])
+def test_provider_rejects_invalid_output_limit(limit):
+    with pytest.raises(ValueError, match="max_output_tokens"):
+        OpenAIProvider("test", "secret", max_output_tokens=limit)
+
+
 def make_client(response: object) -> Mock:
     client = Mock()
     client.stream = FakeStream(response if isinstance(response, list) else [response])
@@ -141,6 +155,7 @@ def test_provider_builds_chat_completion_request() -> None:
     assert payload["model"] == "deepseek-flash"
     assert payload["stream"] is True
     assert payload["stream_options"] == {"include_usage": True}
+    assert "max_tokens" not in payload
     assert payload["extra_body"] == {"thinking": {"type": "disabled"}}
     assert payload["tools"] == [
         {

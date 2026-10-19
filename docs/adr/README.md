@@ -83,7 +83,9 @@ ADR 是**增量演进**的，不是一次性快照：
 | [0016](0016-runtime-configuration.md) | 运行时配置值对象与项目 TOML 加载边界 | Accepted | 2026-09-28 | 工作区未提交变更；提交时补来源 |
 | [0017](0017-headless-mode.md) | Headless 单回合执行与无人值守权限 | Accepted | 2026-10-13 | 工作区未提交变更；提交时补来源 |
 | [0018](0018-windows-shell-environment.md) | Windows Shell 的默认模块环境与 UTF-8 标准流 | Accepted | 2026-10-18 | 工作区未提交变更；提交时补来源 |
-| [0019](0019-default-context-budget.md) | 默认输入预算兼容合法的大页工具输出 | Accepted | 2026-10-18 | 工作区未提交变更；提交时补来源 |
+| [0019](0019-default-context-budget.md) | 默认输入预算兼容合法的大页工具输出 | Superseded by [0020](0020-large-window-context-budget.md) | 2026-10-18 | 工作区未提交变更；提交时补来源 |
+| [0020](0020-large-window-context-budget.md) | 为当前大窗口模型提高默认输入预算 | Accepted | 2026-10-19 | 工作区未提交变更；提交时补来源 |
+| [0021](0021-swebench-evaluation-boundary.md) | SWE-bench 评测控制面与任务容器隔离 | Accepted | 2026-10-19 | 工作区未提交变更；提交时补来源 |
 
 模板见 [template.md](template.md)。
 

@@ -1,6 +1,6 @@
 # 0019. 默认输入预算兼容合法的大页工具输出
 
-- 状态：Accepted
+- 状态：Superseded by [0020](0020-large-window-context-budget.md)
 - 日期：2026-10-18
 - 来源：工作区未提交变更；提交时补实际 commit hash 与 subject
 

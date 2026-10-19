@@ -93,9 +93,12 @@ def checkpoint_count(store):
     return store._connection.execute("SELECT COUNT(*) FROM checkpoints").fetchone()[0]
 
 
-def test_under_threshold_preserves_context_and_makes_no_summary_call(store):
+@pytest.mark.parametrize(
+    "content", ["hello", "x" * 160000], ids=["small", "above_previous_trigger"]
+)
+def test_under_threshold_preserves_context_and_makes_no_summary_call(store, content):
     session = Session(
-        [SystemMessage(content="sys"), UserMessage(content="hello")], store=store
+        [SystemMessage(content="sys"), UserMessage(content=content)], store=store
     )
     before = session.messages
     provider = SummaryProvider()
@@ -114,8 +117,8 @@ def test_default_budget_compacts_without_dropping_a_large_read_page(store, tmp_p
 
     session = Session([SystemMessage(content="original instructions")], store=store)
     for _ in range(12):
-        session.add(UserMessage(content="old question " + "x" * 4000))
-        session.add(AssistantMessage(content="old answer " + "y" * 4000))
+        session.add(UserMessage(content="old question " + "x" * 65000))
+        session.add(AssistantMessage(content="old answer " + "y" * 65000))
     session.add(UserMessage(content="Inspect this file and continue."))
     call = ToolCall(id="read-page", name="read", arguments={"path": path.name})
     session.add(AssistantMessage(tool_calls=(call,)))

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-DEFAULT_CONTEXT_BUDGET = 65536
+DEFAULT_CONTEXT_BUDGET = 786432
 DEFAULT_MAX_STEPS = 20
 
 

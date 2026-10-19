@@ -38,12 +38,18 @@ class OpenAIProvider(LLMProvider):
         base_url: str | None = None,
         *,
         disable_thinking: bool = True,
+        max_output_tokens: int | None = None,
         client: AsyncOpenAI | None = None,
     ) -> None:
+        if max_output_tokens is not None and (
+            type(max_output_tokens) is not int or max_output_tokens < 1
+        ):
+            raise ValueError("max_output_tokens must be a positive integer")
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
         self.disable_thinking = disable_thinking
+        self.max_output_tokens = max_output_tokens
         self._owns_client = client is None
         self._client = client or AsyncOpenAI(
             api_key=api_key,
@@ -67,6 +73,8 @@ class OpenAIProvider(LLMProvider):
             payload["tools"] = [
                 _tool_definition_payload(definition) for definition in request.tools
             ]
+        if self.max_output_tokens is not None:
+            payload["max_tokens"] = self.max_output_tokens
         if self.disable_thinking:
             payload["extra_body"] = {"thinking": {"type": "disabled"}}
 

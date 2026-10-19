@@ -49,7 +49,7 @@ def test_config_uses_deepseek_defaults(
     assert config.base_url == "https://api.deepseek.com"
     assert config.workspace == tmp_path.resolve()
     assert config.session_db_path == tmp_path / ".codehead" / "sessions.sqlite3"
-    assert config.context_budget == 65536
+    assert config.context_budget == 786432
     assert config.max_steps == 20
 
 

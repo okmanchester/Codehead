@@ -89,7 +89,7 @@ PowerShell，Unix 使用 Bash。
 model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
 session_db = ".codehead/sessions.sqlite3"
-context_budget = 65536
+context_budget = 786432
 max_steps = 20
 ```
 
@@ -98,7 +98,7 @@ max_steps = 20
 | `model` | `deepseek-flash`，非空字符串 | `CODEHEAD_MODEL` |
 | `base_url` | `https://api.deepseek.com`，非空字符串 | `DEEPSEEK_BASE_URL` |
 | `session_db` | `.codehead/sessions.sqlite3`，相对路径以 workspace 为基准 | `CODEHEAD_SESSION_DB` |
-| `context_budget` | `65536`，整数且不小于 `1024` | `CODEHEAD_CONTEXT_BUDGET` |
+| `context_budget` | `786432`，整数且不小于 `1024` | `CODEHEAD_CONTEXT_BUDGET` |
 | `max_steps` | `20`，整数且不小于 `1`；每回合的正常模型调用上限 | `CODEHEAD_MAX_STEPS` |
 
 优先级为默认值 → TOML → `.env` → 进程环境；进程环境不会被 `.env` 覆盖，空环境变量
@@ -243,15 +243,16 @@ CLI 将原始消息保存到 workspace 下的 `.codehead/sessions.sqlite3`，默
 system prompt、最新用户输入和近期消息，旧消息继续保存在数据库中，不在请求路径
 重新全量加载。工具调用和对应的全部结果始终作为一个整体保留或压缩。
 
-`CODEHEAD_CONTEXT_BUDGET` 默认 65536，最小 1024，表示估算的**输入** token 预算，
-不是模型窗口大小。需根据目标模型为输出预留空间，再配置输入预算。本地估算包含
+`CODEHEAD_CONTEXT_BUDGET` 默认 786432，最小 1024，表示估算的**输入** token 预算，
+不是模型窗口大小。当前不自动读取模型窗口；默认值面向当前使用的 DeepSeek Flash
+1M 窗口，切换较小窗口的模型时应显式下调，并为输出预留空间。本地估算包含
 消息、工具参数、工具定义和协议开销，使用 JSON 的 UTF-8 字节数除以 3，再加固定
 开销，初始乘以 1.2；正常请求返回的 input usage 仅向上校准当前会话的系数。
 没有 usage 时仍可估算。这不是精确 tokenizer，也不保证服务端一定不会超限。
 
 每次正常模型请求前检查用量，达到预算 75% 时自动摘要，要求压缩后不超过 50%。
-默认配置对应 49152 个估算 token 触发、压缩后不超过 32768；近期消息预算约 16384，
-摘要上限为 4096。需要更早观察压缩时，可显式设置较小预算，例如压缩评测使用的 16384；
+默认配置对应 589824 个估算 token 触发、压缩后不超过 393216；近期消息预算约 196608，
+摘要上限为 49152。需要更早观察压缩时，可显式设置较小预算，例如压缩评测使用的 16384；
 历史评测记录中的显式预算不随默认值变化。
 近期消息约占预算 25%，至少保留最后一个完整消息或工具交互单元，另外保留 system
 prompt 和最新用户输入。摘要复用当前模型，以独立无工具请求处理旧历史；超出单次
@@ -376,3 +377,42 @@ Windows Shell 使用 Windows PowerShell，启动时移除子进程继承的 `PSM
 换行；新片段中的普通 LF 沿用匹配处的换行风格。`write` 保留传入内容的换行。
 两者先写同目录临时文件，再原子替换目标；覆盖现有文件时保留权限位。
 `write` 与成功的 `edit` 仍返回简短摘要。
+
+## SWE-bench Lite 首轮评测
+
+评测入口使用本机 Docker，Windows 仅启动控制容器并保存结果；官方 Harness 的
+`swebench==5.0.2` 安装在控制容器，推理容器没有宿主仓库挂载或 Docker socket。
+需先激活 `conda activate codehead`，在 `.env` 配置 `DEEPSEEK_API_KEY`。
+
+推理镜像在干净源码之外保留官方项目的编译扩展、翻译文件和必要安装元数据，
+不复制忽略目录中的其他源码或测试。付费前直接导入三个目标项目，验证运行环境。
+
+依次执行：
+
+```powershell
+python -m scripts.swebench validate --offline-only
+python -m scripts.swebench preflight --build
+python -m scripts.swebench validate
+python -m scripts.swebench run
+python -m scripts.swebench report --output docs/evaluation/swebench-lite-first-run.md
+```
+
+固定顺序为 `sympy__sympy-20590`、`astropy__astropy-12907`、`django__django-11099`，
+每题只运行一次。参数见 [`scripts/swebench/tasks.json`](scripts/swebench/tasks.json)：
+`deepseek-flash` 非思考模式，输入预算 65536，每题正常请求最多 40 次，含摘要总计
+50 次，每次输出最多 8192 token；Agent 15 分钟，Shell 60 秒，评分 30 分钟。
+累计按高峰价估算达到 40 元，或下一请求保守预估使总额超过 50 元时停止。
+缺失 usage 不按零计费；不保证与服务端账单完全一致。
+
+固定 Lite revision 为 `6ec7bb89b9342f664a54a6e0a6ea6501d3437cc2`，原始数据位于
+`princeton-nlp/SWE-bench_Lite`；5.0.2 所需的官方执行元数据另行固定并逐题校验一致。
+全部评分对照通过后才能付费推理。首题 gold 评分两次，其余各一次；三题空补丁
+负对照实际运行基线测试。推理结束或中断后仍收集补丁；空预测单独记录。
+
+原始事件、usage、终态、补丁、依赖版本、镜像 digest、官方测试日志和结果保存在
+`.codehead/evaluations/swebench/`（已忽略）。`report` 只读取已有产物，不调用模型。
+已有 `predictions.jsonl` 可用 `python -m scripts.swebench validate --predictions <路径>`
+独立评分，每次使用新 run_id，不重跑 Agent。评测边界与取舍见
+[ADR-0021](docs/adr/0021-swebench-evaluation-boundary.md)。
+
+首轮结果、环境修复和后续待办见 [精简评测报告](docs/evaluation/swebench-lite-first-run.md)。
