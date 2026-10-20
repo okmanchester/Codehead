@@ -10,7 +10,8 @@ RUN uv python install 3.12 \
 RUN python -c "import urllib.request,tarfile,io,pathlib; b=urllib.request.urlopen('https://github.com/BurntSushi/ripgrep/releases/download/14.1.1/ripgrep-14.1.1-x86_64-unknown-linux-musl.tar.gz').read(); t=tarfile.open(fileobj=io.BytesIO(b)); p=pathlib.Path('/opt/agent-tools/rg'); p.parent.mkdir(); p.write_bytes(t.extractfile('ripgrep-14.1.1-x86_64-unknown-linux-musl/rg').read()); p.chmod(0o755)"
 COPY pyproject.toml /opt/codehead/pyproject.toml
 COPY src /opt/codehead/src
-RUN uv pip install --python /opt/agent-venv/bin/python /opt/codehead \
+COPY scripts/swebench/agent-constraints.txt /tmp/agent-constraints.txt
+RUN uv pip install --python /opt/agent-venv/bin/python -c /tmp/agent-constraints.txt /opt/codehead \
     && pip freeze > /opt/control-requirements.lock \
     && uv pip freeze --python /opt/agent-venv/bin/python > /opt/agent-requirements.lock
 COPY scripts /opt/driver/scripts

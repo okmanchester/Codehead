@@ -11,7 +11,7 @@ from rich.console import Console
 
 from codehead.agent import Agent, AgentLoop
 from codehead.cli import _main, _parse_args, run_repl
-from codehead.config import RuntimeConfig
+from codehead.config import DEFAULT_MAX_STEPS, RuntimeConfig
 from codehead.config_loader import load_local_config
 from codehead.errors import (
     AgentAbortedError,
@@ -66,7 +66,9 @@ class CountingTool(Tool):
         return "done"
 
 
-def loop_for(provider, *, tools=None, prompt="saved instructions", max_steps=20):
+def loop_for(
+    provider, *, tools=None, prompt="saved instructions", max_steps=DEFAULT_MAX_STEPS
+):
     registry = tools or ToolRegistry()
     return AgentLoop(
         Agent(provider=provider, tools=registry, system_prompt=prompt),
@@ -122,6 +124,7 @@ def setup(tmp_path):
         workspace=tmp_path,
         model="test-model",
         base_url="https://test.invalid",
+        thinking="disabled",
     )
     store = SQLiteSessionStore(config.session_db_path)
     session = Session(
@@ -555,6 +558,8 @@ def test_cli_resume_uses_current_project_configuration(tmp_path, monkeypatch):
         "CODEHEAD_SESSION_DB",
         "CODEHEAD_CONTEXT_BUDGET",
         "CODEHEAD_MAX_STEPS",
+        "CODEHEAD_THINKING",
+        "CODEHEAD_REASONING_EFFORT",
     ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("CODEHEAD_WORKSPACE", str(tmp_path))
@@ -573,7 +578,7 @@ def test_cli_resume_uses_current_project_configuration(tmp_path, monkeypatch):
     store.close()
     (tmp_path / ".codehead" / "config.toml").write_text(
         'model = "new-model"\nbase_url = "https://new.test"\n'
-        "context_budget = 8192\nmax_steps = 3",
+        'context_budget = 8192\nmax_steps = 3\nthinking = "disabled"',
         encoding="utf-8",
     )
     provider = Provider([answer("next answer")])
@@ -600,3 +605,4 @@ def test_cli_resume_uses_current_project_configuration(tmp_path, monkeypatch):
     assert captured[0].base_url == "https://new.test"
     assert captured[0].context_budget == 8192
     assert captured[0].max_steps == 3
+    assert captured[0].thinking == "disabled"

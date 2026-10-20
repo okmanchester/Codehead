@@ -1,0 +1,27 @@
+{
+  "dataset": "princeton-nlp/SWE-bench_Lite",
+  "revision": "6ec7bb89b9342f664a54a6e0a6ea6501d3437cc2",
+  "split": "test",
+  "execution_dataset": "SWE-bench/SWE-bench_Lite",
+  "execution_revision": "b0dde1093fe417d83b7184254edf8199c1f0dff5",
+  "instance_ids": [
+    "astropy__astropy-12907"
+  ],
+  "model": "deepseek-flash",
+  "base_url": "https://api.deepseek.com",
+  "thinking": "enabled",
+  "reasoning_effort": "high",
+  "context_budget": 65536,
+  "max_steps": 40,
+  "max_requests": 50,
+  "max_output_tokens": 8192,
+  "agent_timeout": 900,
+  "shell_timeout": 60,
+  "evaluation_timeout": 1800,
+  "stop_cost_cny": 40,
+  "max_cost_cny": 50,
+  "input_cny_per_million": 2,
+  "output_cny_per_million": 8,
+  "pricing_source": "https://api-docs.deepseek.com/zh-cn/quick_start/pricing/",
+  "pricing_checked_date": "2026-10-20"
+}

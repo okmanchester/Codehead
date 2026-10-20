@@ -16,6 +16,7 @@ from scripts.swebench.common import (
     read_json,
     run_id,
     save_json,
+    source_fingerprint,
 )
 from scripts.swebench.retention import cleanup, cleanup_offline
 
@@ -55,6 +56,8 @@ def offline(root):
             "tests/test_swebench.py",
             "tests/test_swebench_retention.py",
             "tests/test_openai_provider.py",
+            "tests/test_shell_verification.py",
+            "tests/test_swebench_baseline.py",
             "-q",
             "--tb=short",
             f"--basetemp={temporary}",
@@ -71,6 +74,7 @@ def offline(root):
         "passed": result.returncode == 0,
         "returncode": result.returncode,
         "driver_sha256": driver_fingerprint(),
+        "source_sha256": source_fingerprint(),
     }
     save_json(root / "offline.json", outcome)
     print(result.stdout, end="")
@@ -79,10 +83,18 @@ def offline(root):
     return outcome["passed"]
 
 
-def control(command, root, predictions=None):
+def control(command, root, predictions=None, config_path=None):
     from dotenv import load_dotenv
 
     load_dotenv(ROOT / ".env")
+    settings = config(config_path)
+    snapshot = root / "config.json"
+    previous = read_json(snapshot)
+    if previous is not None and previous != settings:
+        raise ValueError(
+            "Artifact directory belongs to a different frozen configuration"
+        )
+    save_json(snapshot, settings)
     name = run_id("codehead-swebench-control")
     image_id = docker(
         "image", "inspect", CONTROL_IMAGE, "--format", "{{.Id}}", capture=True
@@ -105,13 +117,15 @@ def control(command, root, predictions=None):
         f"CODEHEAD_CONTROL_IMAGE={image_id}",
         "--env",
         f"CODEHEAD_DRIVER_SHA256={driver_fingerprint()}",
+        "--env",
+        f"CODEHEAD_SOURCE_SHA256={source_fingerprint()}",
     ]
     if command == "run":
         if not os.getenv("DEEPSEEK_API_KEY"):
             raise ValueError("DEEPSEEK_API_KEY is not configured")
         # Pass the name only. Neither the command line nor artifacts contain the key.
         arguments += ["--env", "DEEPSEEK_API_KEY"]
-    arguments += [image_id, command]
+    arguments += [image_id, command, "--config", "/results/config.json"]
     if predictions:
         target = root / "replay-predictions.jsonl"
         if predictions.resolve() != target.resolve():
@@ -142,9 +156,13 @@ def control(command, root, predictions=None):
         docker("rm", "-f", name, capture=True)
 
 
-def report(root, destination=None):
+def report(root, destination=None, config_path=None):
     preflight = read_json(root / "preflight.json", {})
-    settings = preflight.get("settings") or config()
+    settings = (
+        preflight.get("settings")
+        or read_json(root / "config.json")
+        or config(config_path)
+    )
     validation = read_json(root / "validation.json", {})
     thinking = settings.get("thinking")
     effort = settings.get("reasoning_effort")
@@ -198,7 +216,7 @@ def report(root, destination=None):
                 ),
                 "patch": record.get("patch"),
                 "grading": record.get("grading"),
-                "artifacts": f".codehead/evaluations/swebench/first-run/{instance}/",
+                "artifacts": str(root / "first-run" / instance),
             }
         )
     outcome = {
@@ -209,12 +227,20 @@ def report(root, destination=None):
         "controls_passed": validation.get("passed", False),
         "instances": rows,
         "resolved_count": sum(r["official_result"] == "resolved" for r in rows),
+        "completed_count": sum(r["agent_status"] == "completed" for r in rows),
+        "budget_exhausted_count": sum(
+            r["agent_status"] == "budget_exhausted" for r in rows
+        ),
+        "not_run_count": sum(
+            not (root / "first-run" / r["instance_id"] / "attempt.json").exists()
+            for r in rows
+        ),
         "estimated_cost_cny": sum(r["estimated_cost_cny"] for r in rows),
         "analysis": analysis,
     }
     save_json(root / "summary.json", outcome)
     lines = [
-        "# SWE-bench Lite 首轮评测",
+        "# SWE-bench Lite 固定批次评测",
         "",
         f"数据：`{settings['dataset']}@{settings['revision']}`。模型：`{settings['model']}`。",
         (
@@ -222,7 +248,8 @@ def report(root, destination=None):
             f"配置强度：`{effort or '未确认'}`（仅开启时生效）；"
             f"输出上限（思考与正文合计）：`{settings.get('max_output_tokens', '未确认')}`。"
         ),
-        "固定三题、单并发、每题一次；此结果不代表 Lite 整体能力。",
+        f"固定 {len(rows)} 题、单并发、每题一次；此结果不代表 Lite 整体能力。",
+        f"正常请求上限 {settings['max_steps']}；含摘要总请求上限 {settings['max_requests']}。",
         "",
         f"离线检查：{outcome['offline_passed']}；环境就绪：{outcome['preflight_ready']}；评分对照：{outcome['controls_passed']}。",
         "",
@@ -241,7 +268,8 @@ def report(root, destination=None):
         )
     lines += [
         "",
-        f"真实 resolved：{outcome['resolved_count']}/3。累计估算费用：{outcome['estimated_cost_cny']:.6f} 元。",
+        f"真实 resolved：{outcome['resolved_count']}/{len(rows)}。累计估算费用：{outcome['estimated_cost_cny']:.6f} 元。",
+        f"正常收尾：{outcome['completed_count']}；预算耗尽：{outcome['budget_exhausted_count']}；未运行：{outcome['not_run_count']}。",
         "费用按全部输入未命中缓存和高峰价估算，usage 缺失使用保守预留，非服务端账单保证。",
         "",
     ]
@@ -256,7 +284,7 @@ def report(root, destination=None):
         lines += [f"- {item}" for item in analysis["next_steps"]]
     lines += [
         "",
-        "原始证据：`preflight.json`、`offline.log`、`validation.json`、`logs/run_evaluation/`、`first-run/`；均位于 `.codehead/evaluations/swebench/`。",
+        f"原始证据：`preflight.json`、`offline.log`、`validation.json`、`logs/run_evaluation/`、`first-run/`；目录：`{root}`。",
         "评分可用 `validate --predictions <predictions.jsonl>` 独立重放；每次生成新 run_id。",
         "",
     ]
@@ -273,6 +301,7 @@ def main():
         "command", choices=["preflight", "validate", "run", "report", "cleanup"]
     )
     parser.add_argument("--artifacts", type=Path, default=ARTIFACTS)
+    parser.add_argument("--config", type=Path, help="Frozen task and budget JSON")
     parser.add_argument(
         "--build",
         action="store_true",
@@ -318,7 +347,7 @@ def main():
     status = 0
     try:
         if args.command == "report":
-            report(root, args.output)
+            report(root, args.output, args.config)
         elif args.command == "preflight":
             free = shutil.disk_usage(root).free
             save_json(
@@ -338,15 +367,15 @@ def main():
                     "scripts/swebench/Dockerfile",
                     ".",
                 )
-            status = control("preflight", root)
+            status = control("preflight", root, config_path=args.config)
         elif args.command == "validate":
             if not args.predictions and not offline(root):
                 status = 1
             elif not args.offline_only:
-                status = control("validate", root, args.predictions)
+                status = control("validate", root, args.predictions, args.config)
         else:
-            status = control("run", root)
-            report(root)
+            status = control("run", root, config_path=args.config)
+            report(root, config_path=args.config)
     except (ValueError, RuntimeError, OSError, subprocess.CalledProcessError) as exc:
         save_json(root / f"host-{args.command}-error.json", {"error": str(exc)})
         print(str(exc), file=sys.stderr)

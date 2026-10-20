@@ -28,9 +28,29 @@ from scripts.swebench.patches import (
     extract_tree,
     initialize_baseline,
 )
+from scripts.swebench.projects import PROJECTS
 from scripts.swebench.retention import cleanup_after_run
 
 RESULTS = Path("/results")
+
+
+def execution_identity():
+    installed = subprocess.check_output(
+        [
+            "/opt/agent-venv/bin/python",
+            "-c",
+            "from scripts.swebench.common import source_fingerprint; print(source_fingerprint())",
+        ],
+        text=True,
+    ).strip()
+    if installed != os.environ.get("CODEHEAD_SOURCE_SHA256"):
+        raise RuntimeError(
+            "Installed Codehead source differs from host; rebuild control image"
+        )
+    return {
+        "source_sha256": installed,
+        "control_image_id": os.environ["CODEHEAD_CONTROL_IMAGE"],
+    }
 
 
 def archive_bytes(container, path):
@@ -149,11 +169,14 @@ def preflight(client, settings):
             )
         control = client.images.get(os.environ["CODEHEAD_CONTROL_IMAGE"])
         result["control_image"] = image_record(control)
+        result["execution_identity"] = execution_identity()
         result["docker_cli_version"] = subprocess.run(
             ["docker", "--version"], check=True, capture_output=True, text=True
         ).stdout.strip()
         rows = load_tasks(settings)
         for row in rows:
+            if row["repo"] not in PROJECTS:
+                raise ValueError(f"No explicit runtime mapping for {row['repo']}")
             image_name = row["image"]
             try:
                 image = client.images.get(image_name)
@@ -302,6 +325,13 @@ def validate(client, settings, predictions=None):
     validation = {"passed": False, "scores": []}
     save_json(RESULTS / "validation.json", validation)
     try:
+        identity = execution_identity()
+        preflight = read_json(RESULTS / "preflight.json", {})
+        if (
+            preflight.get("settings") != settings
+            or preflight.get("execution_identity") != identity
+        ):
+            raise RuntimeError("Preflight configuration or execution identity changed")
         prepare_runtimes(client, rows)
     except Exception as exc:  # noqa: BLE001 - no paid call before runtime validation
         validation["reason"] = f"Runtime validation failed: {type(exc).__name__}: {exc}"
@@ -329,6 +359,7 @@ def validate(client, settings, predictions=None):
                 return validation
     validation["passed"] = True
     validation["driver_sha256"] = driver_fingerprint()
+    validation["execution_identity"] = identity
     validation["settings_sha256"] = hashlib.sha256(
         json.dumps(settings, sort_keys=True).encode()
     ).hexdigest()
@@ -337,18 +368,26 @@ def validate(client, settings, predictions=None):
 
 
 def prepare_runtimes(client, rows):
-    result = {"passed": False, "instances": {}}
-    save_json(RESULTS / "runtime-validation.json", result)
     preflight = read_json(RESULTS / "preflight.json")
+    result = {
+        "passed": False,
+        "instances": {},
+        "execution_identity": preflight["execution_identity"],
+    }
+    save_json(RESULTS / "runtime-validation.json", result)
     probe = (
         "import sys,subprocess,pathlib; "
         "from codehead.llm import OpenAIProvider; from codehead.tools import BashTool; "
+        "from scripts.swebench.common import source_fingerprint; "
+        "from scripts.swebench.shell_checks import verify_shell; "
         "print(sys.executable); print(sys.version); "
         "assert sys.version_info[:2] == (3,12); "
         "assert sys.prefix == '/opt/agent-venv'; "
         "assert not pathlib.Path('/var/run/docker.sock').exists(); "
         "assert subprocess.check_output(['git','rev-list','--count','HEAD']).strip() == b'1'; "
-        "assert not subprocess.check_output(['git','remote']).strip()"
+        "assert not subprocess.check_output(['git','remote']).strip(); "
+        f"assert source_fingerprint() == {preflight['execution_identity']['source_sha256']!r}; "
+        "print(verify_shell(pathlib.Path('/testbed')))"
     )
     for row in rows:
         instance_id = row["instance_id"]
@@ -361,12 +400,12 @@ def prepare_runtimes(client, rows):
         image = inference_image(
             client, preflight["images"][instance_id]["id"], source, work
         )
-        module = row["repo"].split("/")[-1]
+        module = PROJECTS[row["repo"]][0]
         output = client.containers.run(
             image.id,
             project_command(
                 "python -c "
-                + shlex.quote(f"import {module}; print({module}.__version__)")
+                + shlex.quote(f"import {module}; print({module}.__file__)")
                 + " && /opt/agent-tools/rg --version && "
                 "/opt/agent-venv/bin/python -c " + shlex.quote(probe)
             ),
@@ -379,6 +418,7 @@ def prepare_runtimes(client, rows):
         )
         result["instances"][instance_id] = {
             "image": image_record(image),
+            "base_image_id": preflight["images"][instance_id]["id"],
             "source_archive": str(work / "source.tar"),
             "environment_archive": str(work / "environment.tar"),
             "environment_members": read_json(work / "environment-members.json"),
@@ -433,8 +473,12 @@ def source_archive(client, row, image_id, work):
         )
         if code:
             raise RuntimeError(ignored.decode("utf-8", "replace"))
+        module, packages, metadata = PROJECTS[row["repo"]]
         members = environment_members(
-            ignored.decode("utf-8").split("\0"), row["repo"].split("/")[-1]
+            ignored.decode("utf-8").split("\0"),
+            module,
+            package_paths=packages,
+            metadata_paths=metadata,
         )
         save_json(work / "environment-members.json", members)
         put_files(
@@ -510,6 +554,7 @@ ENTRYPOINT []
             "swebench/common.py",
             "swebench/provider.py",
             "swebench/worker.py",
+            "swebench/shell_checks.py",
         ):
             archive.add(
                 Path("/opt/driver/scripts") / name, arcname="driver/scripts/" + name
@@ -685,7 +730,31 @@ def run(client, settings):
         raise RuntimeError(
             "Evaluation driver changed after validation; validate again before paid calls"
         )
+    identity = execution_identity()
+    preflight = read_json(RESULTS / "preflight.json", {})
+    runtime = read_json(RESULTS / "runtime-validation.json", {})
+    if (
+        offline.get("source_sha256") != identity["source_sha256"]
+        or any(
+            record.get("execution_identity") != identity
+            for record in (preflight, validation, runtime)
+        )
+        or preflight.get("settings") != settings
+        or runtime.get("passed") is not True
+    ):
+        raise RuntimeError(
+            "Source, image or runtime validation changed; validate again before paid calls"
+        )
     rows = read_json(RESULTS / "dataset.json")
+    if [row["instance_id"] for row in rows] != settings["instance_ids"]:
+        raise RuntimeError("Saved dataset does not match frozen task order")
+    for row in rows:
+        instance = row["instance_id"]
+        prepared = runtime["instances"][instance]
+        if prepared["base_image_id"] != preflight["images"][instance]["id"]:
+            raise RuntimeError("Prepared runtime base image differs from preflight")
+        if client.images.get(prepared["image"]["id"]).id != prepared["image"]["id"]:
+            raise RuntimeError("Prepared inference image changed")
     run_dir = RESULTS / "first-run"
     run_dir.mkdir(exist_ok=True)
     spent = 0.0
@@ -787,10 +856,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("command", choices=["preflight", "validate", "run"])
     parser.add_argument("--predictions")
+    parser.add_argument("--config", type=Path)
     args = parser.parse_args()
     RESULTS.mkdir(parents=True, exist_ok=True)
     client = docker.from_env(timeout=1800)
-    settings = config()
+    settings = config(args.config)
     try:
         if os.environ.get("CODEHEAD_DRIVER_SHA256") != driver_fingerprint():
             raise RuntimeError("Host and control driver fingerprints differ")

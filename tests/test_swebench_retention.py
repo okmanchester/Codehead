@@ -375,6 +375,25 @@ def test_run_cleans_after_persisting_acceptance_and_keeps_attempt(
     score = read_json(output / "grading/score.json")
     (output / "result.json").unlink()
     (output / "attempt.json").unlink()
+    identity = {
+        "source_sha256": "fixture-source",
+        "control_image_id": "fixture-control",
+    }
+    monkeypatch.setattr(control, "execution_identity", lambda: identity)
+    preflight = read_json(tmp_path / "preflight.json")
+    preflight.update(
+        execution_identity=identity, images={instance: {"id": "fixture-base"}}
+    )
+    save_json(tmp_path / "preflight.json", preflight)
+    runtime = read_json(tmp_path / "runtime-validation.json")
+    runtime["execution_identity"] = identity
+    runtime["instances"][instance].update(
+        base_image_id="fixture-base", image={"id": "fixture-runtime"}
+    )
+    save_json(tmp_path / "runtime-validation.json", runtime)
+    client = SimpleNamespace(
+        images=SimpleNamespace(get=lambda image_id: SimpleNamespace(id=image_id))
+    )
     save_json(
         tmp_path / "validation.json",
         {
@@ -383,11 +402,16 @@ def test_run_cleans_after_persisting_acceptance_and_keeps_attempt(
             "settings_sha256": hashlib.sha256(
                 json.dumps(settings, sort_keys=True).encode()
             ).hexdigest(),
+            "execution_identity": identity,
         },
     )
     save_json(
         tmp_path / "offline.json",
-        {"passed": True, "driver_sha256": driver_fingerprint()},
+        {
+            "passed": True,
+            "driver_sha256": driver_fingerprint(),
+            "source_sha256": "fixture-source",
+        },
     )
     monkeypatch.setattr(control, "RESULTS", tmp_path)
     monkeypatch.setattr(control, "infer", lambda *args: inference)
@@ -401,7 +425,7 @@ def test_run_cleans_after_persisting_acceptance_and_keeps_attempt(
             return unlink(path, *args, **kwargs)
 
         monkeypatch.setattr(Path, "unlink", fail_changed)
-    outcome = control.run(None, settings)
+    outcome = control.run(client, settings)
     assert outcome["halted"] is None
     assert read_json(output / "result.json")["acceptance"]["patch_exported"]
     assert (output / "work/changed.tar").exists() is locked
@@ -409,4 +433,4 @@ def test_run_cleans_after_persisting_acceptance_and_keeps_attempt(
     monkeypatch.setattr(
         control, "infer", lambda *args: pytest.fail("Repeated inference")
     )
-    assert control.run(None, settings)["halted"] is None
+    assert control.run(client, settings)["halted"] is None

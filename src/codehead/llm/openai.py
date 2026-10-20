@@ -37,7 +37,7 @@ class OpenAIProvider(LLMProvider):
         api_key: str,
         base_url: str | None = None,
         *,
-        thinking: Literal["enabled", "disabled"] = "disabled",
+        thinking: Literal["enabled", "disabled"] = "enabled",
         reasoning_effort: Literal["low", "high", "max"] = "high",
         max_output_tokens: int | None = None,
         client: AsyncOpenAI | None = None,

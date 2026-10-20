@@ -83,17 +83,24 @@ def test_waiting_status_ends_before_text_and_on_failure(failure):
     status.stop.assert_called()
 
 
-def test_build_agent_loop_passes_thinking_configuration(tmp_path):
-    config = RuntimeConfig(
-        workspace=tmp_path, api_key="test", thinking="enabled", reasoning_effort="low"
-    )
+@pytest.mark.parametrize(
+    "overrides,thinking,effort",
+    [
+        ({}, "enabled", "high"),
+        ({"thinking": "disabled", "reasoning_effort": "low"}, "disabled", "low"),
+    ],
+)
+def test_build_agent_loop_passes_thinking_configuration(
+    tmp_path, overrides, thinking, effort
+):
+    config = RuntimeConfig(workspace=tmp_path, api_key="test", **overrides)
     with (
         patch("codehead.cli.find_ripgrep", return_value="rg"),
         patch("codehead.cli.OpenAIProvider") as constructor,
     ):
         build_agent_loop(config)
-    assert constructor.call_args.kwargs["thinking"] == "enabled"
-    assert constructor.call_args.kwargs["reasoning_effort"] == "low"
+    assert constructor.call_args.kwargs["thinking"] == thinking
+    assert constructor.call_args.kwargs["reasoning_effort"] == effort
 
 
 def test_repl_keeps_one_session_and_handles_exit() -> None:

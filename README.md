@@ -88,22 +88,22 @@ PowerShell，Unix 使用 Bash。
 ```toml
 model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
-thinking = "disabled"
+thinking = "enabled"
 reasoning_effort = "high"
 session_db = ".codehead/sessions.sqlite3"
 context_budget = 786432
-max_steps = 20
+max_steps = 100
 ```
 
 | 字段 | 默认值 / 约束 | 环境覆盖 |
 | --- | --- | --- |
 | `model` | `deepseek-flash`，非空字符串 | `CODEHEAD_MODEL` |
 | `base_url` | `https://api.deepseek.com`，非空字符串 | `DEEPSEEK_BASE_URL` |
-| `thinking` | `disabled`；可选 `enabled` / `disabled` | `CODEHEAD_THINKING` |
+| `thinking` | `enabled`；可选 `enabled` / `disabled` | `CODEHEAD_THINKING` |
 | `reasoning_effort` | `high`；可选 `low` / `high` / `max`，仅开启思考时发送 | `CODEHEAD_REASONING_EFFORT` |
 | `session_db` | `.codehead/sessions.sqlite3`，相对路径以 workspace 为基准 | `CODEHEAD_SESSION_DB` |
 | `context_budget` | `786432`，整数且不小于 `1024` | `CODEHEAD_CONTEXT_BUDGET` |
-| `max_steps` | `20`，整数且不小于 `1`；每回合的正常模型调用上限 | `CODEHEAD_MAX_STEPS` |
+| `max_steps` | `100`，整数且不小于 `1`；每回合的正常模型调用上限 | `CODEHEAD_MAX_STEPS` |
 
 优先级为默认值 → TOML → `.env` → 进程环境；进程环境不会被 `.env` 覆盖，空环境变量
 视为未设置。合并后的参数在启动时统一校验，TOML 中的整数不得写成字符串或布尔值。
@@ -126,7 +126,7 @@ local = load_local_config()  # 仅路径配置，不要求 API key 或有效的�
 
 ### DeepSeek 思考模式
 
-将 `thinking` 设为 `enabled` 即可启用，默认强度为 `high`。交互 CLI 在模型调用期间显示
+思考模式默认开启，强度为 `high`；将 `thinking` 设为 `disabled` 可关闭。交互 CLI 在模型调用期间显示
 “等待模型响应”，随后只展示正文和工具状态；思考内容随完整 assistant 消息保存到本地
 会话归档。headless 使用同一配置，stdout 仍只输出最终答案。
 
@@ -399,41 +399,53 @@ Windows Shell 使用 Windows PowerShell，启动时移除子进程继承的 `PSM
 两者先写同目录临时文件，再原子替换目标；覆盖现有文件时保留权限位。
 `write` 与成功的 `edit` 仍返回简短摘要。
 
-## SWE-bench Lite 首轮评测
+Unix 的 `bash` 工具在登录初始化之后、执行用户命令之前启用 `errexit` 和 `pipefail`。
+失败管道及未显式处理的失败命令按 Bash 规则返回非零值，后续成功命令不会将其覆盖；
+条件、AND/OR 列表和显式 `||` 恢复遵循 Bash 语义。提前截断管道可能产生 SIGPIPE/141，
+工具如实报告，不从输出中的 `ERROR` 等文字推断测试结果。Windows 行为保持不变。
+取舍见 [ADR-0024](docs/adr/0024-unix-shell-failure-status.md)。
+
+## SWE-bench Lite 固定批次评测
 
 评测入口使用本机 Docker，Windows 仅启动控制容器并保存结果；官方 Harness 的
 `swebench==5.0.2` 安装在控制容器，推理容器没有宿主仓库挂载或 Docker socket。
 需先激活 `conda activate codehead`，在 `.env` 配置 `DEEPSEEK_API_KEY`。
 
 评测参数独立读取 `scripts/swebench/tasks.json`，不继承主程序 TOML 或其环境覆盖。
-`thinking` 默认 `disabled`，`reasoning_effort` 默认 `high`，允许值与主程序相同。
+所有评测入口支持 `--config <JSON>`；宿主与控制容器读取同一份冻结配置，产物目录
+中的 `config.json` 不允许被不同配置覆盖。不同批次必须使用独立 `--artifacts` 目录。
+`thinking` 默认 `enabled`，`reasoning_effort` 默认 `high`，允许值与主程序相同。
 worker 使用这些实际设置，报告记录模型、模式、配置强度和输出上限。
 `max_output_tokens` 默认 `8192`，包含思考与正文合计；开启思考不会自动放宽输出、
 上下文或费用预算，usage 的输出总量已包含推理 token，不再重复计费。
 较长思考可能截断或更频繁触发压缩；真实模型试点应使用独立 `--artifacts` 目录、
-固定任务、显式费用与时间预算，先使用 `low`，记录截断、压缩、延迟和费用再调整上限。
+固定任务、显式费用与时间预算，记录截断、压缩、延迟和费用再调整参数。
 
 修改配置或驱动会使验证指纹失效，须重新完成离线检查和 gold / 负对照验证后再运行，
 旧产物不能直接复用为新配置的验收。历史报告仅对核实过的旧驱动指纹标注固定关闭，
 其余旧版模式显示未确认，不根据 `disable_thinking=false` 推断实际开启。
 
 推理镜像在干净源码之外保留官方项目的编译扩展、翻译文件和必要安装元数据，
-不复制忽略目录中的其他源码或测试。付费前直接导入三个目标项目，验证运行环境。
+不复制忽略目录中的其他源码或测试。付费前逐题直接导入目标项目，验证运行环境。
+支持的 12 个仓库在 `scripts/swebench/projects.py` 显式配置导入名及包/元数据路径，
+覆盖 `sklearn` 和 `src/`、`lib/` 布局。逐题推理镜像直接运行真实 Shell 失败回归。
+宿主与实际安装核心的源码指纹必须相同；付费门禁同时核验配置、驱动、核心源码、
+控制及推理镜像身份。重建控制镜像使用 `agent-constraints.txt` 固定首轮 Agent 依赖。
 
 依次执行：
 
 ```powershell
-python -m scripts.swebench validate --offline-only
-python -m scripts.swebench preflight --build
-python -m scripts.swebench validate
-python -m scripts.swebench run
-python -m scripts.swebench report --output docs/evaluation/swebench-lite-first-run.md
+python -m scripts.swebench validate --offline-only --artifacts .codehead/evaluations/swebench-default-thinking
+python -m scripts.swebench preflight --build --artifacts .codehead/evaluations/swebench-default-thinking
+python -m scripts.swebench validate --artifacts .codehead/evaluations/swebench-default-thinking
+python -m scripts.swebench run --artifacts .codehead/evaluations/swebench-default-thinking
+python -m scripts.swebench report --artifacts .codehead/evaluations/swebench-default-thinking --output .codehead/evaluations/swebench-default-thinking/report.md
 ```
 
 固定顺序为 `sympy__sympy-20590`、`astropy__astropy-12907`、`django__django-11099`，
 每题只运行一次。参数见 [`scripts/swebench/tasks.json`](scripts/swebench/tasks.json)：
-`deepseek-flash` 非思考模式，输入预算 65536，每题正常请求最多 40 次，含摘要总计
-50 次，每次输出最多 8192 token；Agent 15 分钟，Shell 60 秒，评分 30 分钟。
+`deepseek-flash` 思考模式 `enabled/high`，输入预算 65536，每题正常请求最多 100 次，
+含摘要总计 125 次，每次输出最多 8192 token；Agent 15 分钟，Shell 60 秒，评分 30 分钟。
 累计按高峰价估算达到 40 元，或下一请求保守预估使总额超过 50 元时停止。
 缺失 usage 不按零计费；不保证与服务端账单完全一致。
 
@@ -443,7 +455,8 @@ python -m scripts.swebench report --output docs/evaluation/swebench-lite-first-r
 负对照实际运行基线测试。推理结束或中断后仍收集补丁；空预测单独记录。
 
 原始事件、usage、终态、补丁、依赖版本、镜像 digest、官方测试日志和结果保存在
-`.codehead/evaluations/swebench/`（已忽略）。`report` 只读取已有产物，不调用模型。
+`--artifacts` 指定目录（已忽略）；未指定时为 `.codehead/evaluations/swebench/`。
+旧目录保留历史配置，新默认配置须使用新目录。`report` 只读取已有产物，不调用模型。
 已有 `predictions.jsonl` 可用 `python -m scripts.swebench validate --predictions <路径>`
 独立评分，每次使用新 run_id，不重跑 Agent。评测边界与取舍见
 [ADR-0021](docs/adr/0021-swebench-evaluation-boundary.md)。
@@ -475,3 +488,42 @@ python -m scripts.swebench cleanup --apply   # 执行同一保留策略
 [ADR-0022](docs/adr/0022-swebench-artifact-retention.md)。
 
 首轮结果、环境修复和后续待办见 [精简评测报告](docs/evaluation/swebench-lite-first-run.md)。
+
+### Shell 修复复验与 20 题基线
+
+原三题复验配置为 `scripts/swebench/tasks-shell-fix.json`，保持 40 步、含摘要 50 次请求；
+历史专用配置和首轮证据保留。新基线配置为 `scripts/swebench/tasks-20.json`，冻结 20 题与
+顺序，覆盖全部 12 个仓库并排除原三题；正常请求上限 100 步，含摘要总上限 125 次。
+主程序与默认评测均为 100 步、思考模式 `enabled/high`；20 题配置也开启思考。
+已运行的三题和单题实验配置维持原值。两组各自累计 40 元停止，下一请求保守预留不得超过 50 元；
+其他模型、上下文、输出和超时参数不变，不自动加预算、重试或换题。
+
+按批次分别执行以下命令，先完成三题复验，再运行 20 题付费基线：
+
+```powershell
+python -m scripts.swebench preflight --build --config scripts/swebench/tasks-shell-fix.json --artifacts .codehead/evaluations/swebench-shell-fix
+python -m scripts.swebench validate --config scripts/swebench/tasks-shell-fix.json --artifacts .codehead/evaluations/swebench-shell-fix
+python -m scripts.swebench run --config scripts/swebench/tasks-shell-fix.json --artifacts .codehead/evaluations/swebench-shell-fix
+
+python -m scripts.swebench preflight --build --config scripts/swebench/tasks-20.json --artifacts .codehead/evaluations/swebench-lite20-v1-thinking
+python -m scripts.swebench validate --config scripts/swebench/tasks-20.json --artifacts .codehead/evaluations/swebench-lite20-v1-thinking
+python -m scripts.swebench run --config scripts/swebench/tasks-20.json --artifacts .codehead/evaluations/swebench-lite20-v1-thinking
+```
+
+选题规则、种子、各仓库候选数、配额、排除清单及原始身份元数据哈希保存在新配置的
+`selection` 中；`python -m scripts.swebench.selection <元数据JSON> --output <新配置JSON>`
+可从固定数据重建，已有输出文件不会被覆盖。报告分别统计官方 resolved、Agent 正常收尾、
+预算耗尽和未运行任务。三题前后比较仅作诊断，Astropy 历史环境不一致不能用于因果推断。
+本批次不修改完成条件或修改范围约束。见 [ADR-0025](docs/adr/0025-frozen-evaluation-batches.md)。
+
+2026-10-20 三题复验结果见 [Shell 修复复验报告](docs/evaluation/shell-fix-three-task-rerun.md)。
+20 题清单和顺序已冻结，本次按用户要求暂缓运行。开启思考后的新配置需使用新产物目录，
+重建包含当前源码的镜像并重新通过免费门禁；旧验收失效。默认策略见
+[ADR-0026](docs/adr/0026-default-thinking-and-step-budget.md)。
+
+Astropy 单题 100 步独立复验见 [运行报告](docs/evaluation/astropy-100-step-run.md)，
+配置为 `scripts/swebench/tasks-astropy-100.json`；该次官方 resolved，但仍耗尽 100 步。
+
+随后启用思考模式 `enabled/high` 的 [40 步复验](docs/evaluation/astropy-thinking-run.md)
+在 18 次请求后正常完成，官方 resolved，未触发条件性的 100 步运行；配置见
+`scripts/swebench/tasks-astropy-thinking-40.json`。

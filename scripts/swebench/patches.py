@@ -7,7 +7,9 @@ import tarfile
 from pathlib import Path, PurePosixPath
 
 
-def environment_members(names: list[str], module: str) -> list[str]:
+def environment_members(
+    names: list[str], module: str, *, package_paths=None, metadata_paths=None
+) -> list[str]:
     """Retain runtime binaries and install metadata, never ignored source/tests."""
     metadata = {
         "PKG-INFO",
@@ -17,21 +19,20 @@ def environment_members(names: list[str], module: str) -> list[str]:
         "dependency_links.txt",
     }
     selected = []
+    roots = [PurePosixPath(p) for p in (package_paths or (module,))]
+    installs = {p.lower() for p in (metadata_paths or (f"{module}.egg-info",))}
     for name in names:
         path = PurePosixPath(name)
         parts = path.parts
         if not parts or path.is_absolute() or ".." in parts or "tests" in parts:
             continue
-        if parts[0] == module:
+        root = next((root for root in roots if path.is_relative_to(root)), None)
+        if root is not None:
             if re.search(r"\.(?:so(?:\.\d+)*|pyd|dll|dylib|mo)$", path.name) or (
-                len(parts) == 2 and path.name == "_version.py"
+                path.parent == root and path.name == "_version.py"
             ):
                 selected.append(name)
-        elif (
-            len(parts) == 2
-            and parts[0].lower() == f"{module.lower()}.egg-info"
-            and path.name in metadata
-        ):
+        elif path.parent.as_posix().lower() in installs and path.name in metadata:
             selected.append(name)
     return selected
 

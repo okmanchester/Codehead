@@ -7,6 +7,7 @@ from typing import ClassVar
 import pytest
 
 from codehead.agent import Agent, AgentLoop
+from codehead.config import DEFAULT_MAX_STEPS
 from codehead.errors import AgentAbortedError, ModelError, ToolExecutionError
 from codehead.llm import LLMProvider
 from codehead.models import (
@@ -101,7 +102,7 @@ def make_loop(
     provider: LLMProvider,
     tools: ToolRegistry | None = None,
     *,
-    max_steps: int = 20,
+    max_steps: int = DEFAULT_MAX_STEPS,
 ) -> AgentLoop:
     agent = Agent(
         provider=provider,
@@ -315,15 +316,16 @@ def test_rejected_response_has_no_side_effects(
 
 def test_default_step_limit_aborts_repeating_tool_calls() -> None:
     provider = RepeatingProvider()
+    tool = RecordingTool()
+    loop = AgentLoop(
+        Agent(provider=provider, tools=ToolRegistry([tool]), system_prompt="system"),
+        permission_policy=PermissionPolicy.allow_all(Path.cwd(), ["record"]),
+    )
 
-    with pytest.raises(AgentAbortedError, match="20 steps"):
-        asyncio.run(
-            make_loop(provider, ToolRegistry([RecordingTool()])).run(
-                Session(), "never finish"
-            )
-        )
+    with pytest.raises(AgentAbortedError, match="100 steps"):
+        asyncio.run(loop.run(Session(), "never finish"))
 
-    assert provider.call_count == 20
+    assert provider.call_count == len(tool.values) == 100
 
 
 def test_system_prompt_includes_only_root_agents_file(tmp_path: Path) -> None:

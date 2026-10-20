@@ -21,7 +21,8 @@ class BashTool(Tool):
     description = (
         "Run a shell command (PowerShell on Windows, Bash on Unix). "
         "Optional workdir selects a workspace directory for this call only; "
-        "default is the workspace root. Large stdout/stderr are truncated."
+        "default is the workspace root. Unix Bash enables errexit and pipefail; "
+        "handle expected failures explicitly. Large stdout/stderr are truncated."
     )
     parameters: ClassVar[JsonObject] = {
         "type": "object",
@@ -161,7 +162,7 @@ def _shell_command(command: str) -> list[str]:
             "-Command",
             wrapped_command,
         ]
-    return ["/bin/bash", "-lc", command]
+    return ["/bin/bash", "-lc", "set -e -o pipefail\n" + command]
 
 
 class _BoundedBytes:

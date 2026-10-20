@@ -1,6 +1,7 @@
 """Small artifact helpers shared by the host, controller and task worker."""
 
 import hashlib
+import importlib.util
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -18,13 +19,40 @@ Issue:
 """
 
 
-def config() -> dict:
-    settings = json.loads(Path(__file__).with_name("tasks.json").read_text("utf-8"))
+def config(path: Path | None = None) -> dict:
+    settings = json.loads(
+        (path or Path(__file__).with_name("tasks.json")).read_text("utf-8")
+    )
     if settings.get("thinking") not in ("enabled", "disabled"):
         raise ValueError("thinking must be enabled or disabled")
     if settings.get("reasoning_effort") not in ("low", "high", "max"):
         raise ValueError("reasoning_effort must be low, high or max")
+    for name in ("max_steps", "max_requests"):
+        value = settings.get(name)
+        if type(value) is not int or value < 1:
+            raise ValueError(f"{name} must be a positive integer")
+    if settings["max_requests"] < settings["max_steps"]:
+        raise ValueError(
+            "max_requests must cover max_steps, including summary headroom"
+        )
+    instances = settings.get("instance_ids")
+    if not instances or len(instances) != len(set(instances)):
+        raise ValueError("instance_ids must be nonempty and unique")
     return settings
+
+
+def source_fingerprint(package: Path | None = None) -> str:
+    """Hash the actual importable core, consistently across checkout/install/OS."""
+    if package is None:
+        spec = importlib.util.find_spec("codehead")
+        if spec is None or spec.origin is None:
+            raise RuntimeError("Cannot locate the installed Codehead core")
+        package = Path(spec.origin).parent
+    digest = hashlib.sha256()
+    for path in sorted(package.rglob("*.py")):
+        digest.update(path.relative_to(package).as_posix().encode() + b"\0")
+        digest.update(path.read_bytes().replace(b"\r\n", b"\n") + b"\0")
+    return digest.hexdigest()
 
 
 def driver_fingerprint() -> str:
@@ -34,7 +62,7 @@ def driver_fingerprint() -> str:
             path.suffix in {".py", ".json", ".txt"} or path.name == "Dockerfile"
         ):
             digest.update(path.name.encode())
-            digest.update(path.read_bytes())
+            digest.update(path.read_bytes().replace(b"\r\n", b"\n"))
     return digest.hexdigest()
 
 

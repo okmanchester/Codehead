@@ -52,8 +52,8 @@ def test_config_uses_deepseek_defaults(
     assert config.workspace == tmp_path.resolve()
     assert config.session_db_path == tmp_path / ".codehead" / "sessions.sqlite3"
     assert config.context_budget == 786432
-    assert config.max_steps == 20
-    assert config.thinking == "disabled"
+    assert config.max_steps == 100
+    assert config.thinking == "enabled"
     assert config.reasoning_effort == "high"
 
 

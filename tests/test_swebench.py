@@ -149,7 +149,7 @@ def test_eval_invalid_thinking_settings_fail_before_execution(
 
 
 @pytest.mark.parametrize(
-    "change", [{"thinking": "enabled"}, {"reasoning_effort": "low"}]
+    "change", [{"thinking": "disabled"}, {"reasoning_effort": "low"}]
 )
 def test_thinking_setting_change_invalidates_paid_run_validation(
     tmp_path, monkeypatch, change
@@ -523,6 +523,10 @@ def test_failed_control_blocks_paid_calls(tmp_path, monkeypatch, bad_control):
     (tmp_path / "dataset.json").write_text(json.dumps(rows), "utf-8")
     monkeypatch.setattr(control, "RESULTS", tmp_path)
     monkeypatch.setattr(control, "prepare_runtimes", lambda *args: None)
+    monkeypatch.setattr(control, "execution_identity", dict)
+    (tmp_path / "preflight.json").write_text(
+        json.dumps({"settings": cfg, "execution_identity": {}}), "utf-8"
+    )
 
     def bad_grade(client, row, patch, settings, *, kind, output):
         resolved = kind == "gold"

@@ -67,7 +67,7 @@ def test_existing_reasoning_is_forwarded_even_when_thinking_disabled(
     reasoning, has_tools
 ):
     client = make_client(chat_response(content="done"))
-    provider = OpenAIProvider("test", "secret", client=client)
+    provider = OpenAIProvider("test", "secret", thinking="disabled", client=client)
     asyncio.run(
         provider.complete(
             LLMRequest(
@@ -359,7 +359,9 @@ def usage(
 
 
 def test_provider_builds_chat_completion_request() -> None:
-    client = make_client(chat_response(content="done", usage=usage()))
+    client = make_client(
+        chat_response(content="done", reasoning_content="thought", usage=usage())
+    )
     provider = OpenAIProvider(
         model="deepseek-flash",
         api_key="secret",
@@ -371,13 +373,14 @@ def test_provider_builds_chat_completion_request() -> None:
             SystemMessage(content="system"),
             UserMessage(content="hello"),
             AssistantMessage(
+                reasoning_content="previous thought",
                 tool_calls=(
                     ToolCall(
                         id="call-1",
                         name="read",
                         arguments={"path": "a.txt"},
                     ),
-                )
+                ),
             ),
             ToolMessage(
                 tool_call_id="call-1",
@@ -400,7 +403,7 @@ def test_provider_builds_chat_completion_request() -> None:
     result = asyncio.run(provider.complete(request))
 
     assert result == LLMResponse(
-        message=AssistantMessage(content="done"),
+        message=AssistantMessage(content="done", reasoning_content="thought"),
         finish_reason=FinishReason.END_TURN,
         usage=TokenUsage(
             input_tokens=10,
@@ -413,7 +416,8 @@ def test_provider_builds_chat_completion_request() -> None:
     assert payload["stream"] is True
     assert payload["stream_options"] == {"include_usage": True}
     assert "max_tokens" not in payload
-    assert payload["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert payload["extra_body"] == {"thinking": {"type": "enabled"}}
+    assert payload["reasoning_effort"] == "high"
     assert payload["tools"] == [
         {
             "type": "function",
@@ -426,6 +430,7 @@ def test_provider_builds_chat_completion_request() -> None:
         {
             "role": "assistant",
             "content": None,
+            "reasoning_content": "previous thought",
             "tool_calls": [
                 {
                     "id": "call-1",
