@@ -12,6 +12,8 @@ from codehead.config import LocalConfig, RuntimeConfig
 _ENV_FIELDS = {
     "model": "CODEHEAD_MODEL",
     "base_url": "DEEPSEEK_BASE_URL",
+    "thinking": "CODEHEAD_THINKING",
+    "reasoning_effort": "CODEHEAD_REASONING_EFFORT",
     "session_db": "CODEHEAD_SESSION_DB",
     "context_budget": "CODEHEAD_CONTEXT_BUDGET",
     "max_steps": "CODEHEAD_MAX_STEPS",

@@ -534,6 +534,8 @@ def worker_settings(settings):
         for name in (
             "model",
             "base_url",
+            "thinking",
+            "reasoning_effort",
             "context_budget",
             "max_steps",
             "max_requests",

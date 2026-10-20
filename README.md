@@ -88,6 +88,8 @@ PowerShell，Unix 使用 Bash。
 ```toml
 model = "deepseek-flash"
 base_url = "https://api.deepseek.com"
+thinking = "disabled"
+reasoning_effort = "high"
 session_db = ".codehead/sessions.sqlite3"
 context_budget = 786432
 max_steps = 20
@@ -97,6 +99,8 @@ max_steps = 20
 | --- | --- | --- |
 | `model` | `deepseek-flash`，非空字符串 | `CODEHEAD_MODEL` |
 | `base_url` | `https://api.deepseek.com`，非空字符串 | `DEEPSEEK_BASE_URL` |
+| `thinking` | `disabled`；可选 `enabled` / `disabled` | `CODEHEAD_THINKING` |
+| `reasoning_effort` | `high`；可选 `low` / `high` / `max`，仅开启思考时发送 | `CODEHEAD_REASONING_EFFORT` |
 | `session_db` | `.codehead/sessions.sqlite3`，相对路径以 workspace 为基准 | `CODEHEAD_SESSION_DB` |
 | `context_budget` | `786432`，整数且不小于 `1024` | `CODEHEAD_CONTEXT_BUDGET` |
 | `max_steps` | `20`，整数且不小于 `1`；每回合的正常模型调用上限 | `CODEHEAD_MAX_STEPS` |
@@ -118,7 +122,24 @@ local = load_local_config()  # 仅路径配置，不要求 API key 或有效的�
 
 `--list-sessions` 使用本地路径加载器；它仍检查配置文件语法和未知字段，但不校验模型
 参数。初版只读取项目配置，不支持用户级配置、profiles、热重载或 `--config` 参数。
-权限继续由独立的 `permissions.toml` 管理，工具上限和模型思考开关保持现有行为。
+权限继续由独立的 `permissions.toml` 管理，工具上限保持现有行为。
+
+### DeepSeek 思考模式
+
+将 `thinking` 设为 `enabled` 即可启用，默认强度为 `high`。交互 CLI 在模型调用期间显示
+“等待模型响应”，随后只展示正文和工具状态；思考内容随完整 assistant 消息保存到本地
+会话归档。headless 使用同一配置，stdout 仍只输出最终答案。
+
+带工具的请求会完整回传活跃历史中的 `reasoning_content`，即使当前已关闭思考。
+开启思考时，历史 assistant 消息缺失该字段会明确报错；空字符串视为字段存在。
+恢复时在事务内提前检查，拒绝后会话仍可在关闭思考后恢复，也可新建会话。
+旧存档可由新代码读取；新增字段后的存档不保证能由旧代码读取。
+
+正常请求的上下文预算包含思考内容，压缩保留的消息也保留完整字段。摘要输入排除思考
+内容，摘要请求固定关闭思考。嵌入调用中，`OpenAIProvider` 使用 `thinking` 和
+`reasoning_effort` 构造参数，原 `disable_thinking` 参数已移除；单次调用可通过
+`LLMRequest.thinking` 覆盖开关，`None` 沿用 provider 设置。设计取舍见
+[ADR-0023](docs/adr/0023-deepseek-thinking.md)。
 
 ## 工具权限
 
@@ -383,6 +404,18 @@ Windows Shell 使用 Windows PowerShell，启动时移除子进程继承的 `PSM
 评测入口使用本机 Docker，Windows 仅启动控制容器并保存结果；官方 Harness 的
 `swebench==5.0.2` 安装在控制容器，推理容器没有宿主仓库挂载或 Docker socket。
 需先激活 `conda activate codehead`，在 `.env` 配置 `DEEPSEEK_API_KEY`。
+
+评测参数独立读取 `scripts/swebench/tasks.json`，不继承主程序 TOML 或其环境覆盖。
+`thinking` 默认 `disabled`，`reasoning_effort` 默认 `high`，允许值与主程序相同。
+worker 使用这些实际设置，报告记录模型、模式、配置强度和输出上限。
+`max_output_tokens` 默认 `8192`，包含思考与正文合计；开启思考不会自动放宽输出、
+上下文或费用预算，usage 的输出总量已包含推理 token，不再重复计费。
+较长思考可能截断或更频繁触发压缩；真实模型试点应使用独立 `--artifacts` 目录、
+固定任务、显式费用与时间预算，先使用 `low`，记录截断、压缩、延迟和费用再调整上限。
+
+修改配置或驱动会使验证指纹失效，须重新完成离线检查和 gold / 负对照验证后再运行，
+旧产物不能直接复用为新配置的验收。历史报告仅对核实过的旧驱动指纹标注固定关闭，
+其余旧版模式显示未确认，不根据 `disable_thinking=false` 推断实际开启。
 
 推理镜像在干净源码之外保留官方项目的编译扩展、翻译文件和必要安装元数据，
 不复制忽略目录中的其他源码或测试。付费前直接导入三个目标项目，验证运行环境。

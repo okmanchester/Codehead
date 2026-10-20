@@ -93,6 +93,81 @@ def checkpoint_count(store):
     return store._connection.execute("SELECT COUNT(*) FROM checkpoints").fetchone()[0]
 
 
+def test_compaction_preserves_retained_reasoning_and_excludes_summary_input(
+    store, tmp_path
+):
+    session = Session(
+        [SystemMessage(content="sys")],
+        store=store,
+        workspace=str(tmp_path),
+        model="test",
+        base_url="https://test.invalid",
+    )
+    for i in range(5):
+        session.add(UserMessage(content=f"question {i}"))
+        session.add(
+            AssistantMessage(
+                content=f"answer {i}", reasoning_content="r" * (300 if i == 4 else 2600)
+            )
+        )
+    session.add(UserMessage(content="continue"))
+    original = session.records
+    without = LLMRequest(
+        messages=tuple(
+            m.model_copy(update={"reasoning_content": None})
+            if isinstance(m, AssistantMessage)
+            else m
+            for m in session.messages
+        )
+    )
+    assert estimate_tokens(LLMRequest(messages=session.messages)) > estimate_tokens(
+        without
+    )
+    provider = SummaryProvider()
+    asyncio.run(prepare(ContextManager(provider, 4096), session))
+    assert provider.calls
+    for request in provider.calls:
+        assert request.thinking == "disabled"
+        assert request.tools == ()
+        assert all(
+            "reasoning_content" not in m
+            for m in json.loads(request.messages[1].content)["messages"]
+        )
+    assert session.summary
+    assert all(message == dict(original)[seq] for seq, message in session.records)
+    assert any(
+        isinstance(m, AssistantMessage) and m.reasoning_content
+        for _, m in session.records
+    )
+    session.finish()
+    restored = Session.resume(
+        session.id,
+        store=store,
+        workspace=str(tmp_path),
+        model="test",
+        base_url="https://test.invalid",
+        require_reasoning_content=True,
+    )
+    assert restored.messages == session.messages
+
+
+def test_large_reasoning_tool_group_is_not_split_to_fit_budget(store):
+    session = Session(
+        [SystemMessage(content="sys"), UserMessage(content="read")], store=store
+    )
+    session.add(
+        AssistantMessage(
+            reasoning_content="r" * 20000, tool_calls=(ToolCall(id="one", name="read"),)
+        )
+    )
+    session.add(ToolMessage(tool_call_id="one", content="result"))
+    before = session.records
+    with pytest.raises(ContextError):
+        asyncio.run(prepare(ContextManager(SummaryProvider(), 1024), session))
+    assert session.records == before
+    assert checkpoint_count(store) == 0
+
+
 @pytest.mark.parametrize(
     "content", ["hello", "x" * 160000], ids=["small", "above_previous_trigger"]
 )
@@ -170,7 +245,9 @@ def test_incremental_batched_compaction_archives_originals_without_reloading(sto
         assert data["previous_summary"] == (None if index == 0 else f"summary {index}")
         summarized.extend(data["messages"])
     assert summarized == [
-        m.model_dump(mode="json") for seq, m in before if seq in removed_sequences
+        m.model_dump(mode="json", exclude={"reasoning_content"})
+        for seq, m in before
+        if seq in removed_sequences
     ]
     previous_summary = session.summary
     original_call_count = len(provider.calls)

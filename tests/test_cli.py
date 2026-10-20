@@ -18,6 +18,7 @@ from codehead.models import (
     LLMResponse,
     LLMResponseCompleted,
     ModelCompleted,
+    ModelStarted,
     ToolCall,
     ToolCompleted,
     ToolResult,
@@ -50,6 +51,49 @@ class FailingLoop:
     async def stream(self, session: Session, user_input: str):
         raise ModelError("unavailable")
         yield
+
+
+@pytest.mark.parametrize(
+    "failure", [None, ModelError("failed"), asyncio.CancelledError()]
+)
+def test_waiting_status_ends_before_text_and_on_failure(failure):
+    output = StringIO()
+    console = Console(file=output)
+    status = Mock()
+
+    class WaitingLoop:
+        async def stream(self, session, user_input):
+            yield ModelStarted(step=1)
+            status.start.assert_called_once()
+            if failure is not None:
+                raise failure
+            yield AssistantTextDelta(step=1, delta="answer")
+            status.stop.assert_called()
+
+    with patch.object(console, "status", return_value=status):
+        result = asyncio.run(
+            run_repl(
+                WaitingLoop(),
+                console=console,
+                read_input=Mock(side_effect=["hello", "quit"]),
+            )
+        )
+    assert result == 0
+    status.start.assert_called_once()
+    status.stop.assert_called()
+
+
+def test_build_agent_loop_passes_thinking_configuration(tmp_path):
+    config = RuntimeConfig(
+        workspace=tmp_path, api_key="test", thinking="enabled", reasoning_effort="low"
+    )
+    with (
+        patch("codehead.cli.find_ripgrep", return_value="rg"),
+        patch("codehead.cli.OpenAIProvider") as constructor,
+    ):
+        build_agent_loop(config)
+    assert constructor.call_args.kwargs["thinking"] == "enabled"
+    assert constructor.call_args.kwargs["reasoning_effort"] == "low"
 
 
 def test_repl_keeps_one_session_and_handles_exit() -> None:

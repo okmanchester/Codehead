@@ -196,6 +196,7 @@ class ContextManager:
         self, summary: str | None, records: tuple[MessageRecord, ...]
     ) -> LLMRequest:
         return LLMRequest(
+            thinking="disabled",
             messages=(
                 SystemMessage(
                     content=(
@@ -215,7 +216,9 @@ class ContextManager:
                         {
                             "previous_summary": summary,
                             "messages": [
-                                message.model_dump(mode="json")
+                                message.model_dump(
+                                    mode="json", exclude={"reasoning_content"}
+                                )
                                 for _, message in records
                             ],
                         },
@@ -223,5 +226,5 @@ class ContextManager:
                         separators=(",", ":"),
                     )
                 ),
-            )
+            ),
         )

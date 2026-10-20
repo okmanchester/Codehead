@@ -16,6 +16,7 @@ from codehead.models import (
     FinishReason,
     LLMResponse,
     ModelCompleted,
+    ModelStarted,
     TokenUsage,
     ToolCall,
     TurnCompleted,
@@ -30,19 +31,24 @@ class FakeLoop:
         answer: str = "done",
         usage: TokenUsage | None = None,
         failure: BaseException | None = None,
+        reasoning_content: str | None = None,
     ) -> None:
         self._answer = answer
         self._usage = usage
         self._failure = failure
+        self._reasoning_content = reasoning_content
         self.closed = False
 
     async def stream(self, session, user_input):
         if self._failure is not None:
             raise self._failure
+        yield ModelStarted(step=1)
         yield ModelCompleted(
             step=1,
             response=LLMResponse(
-                message=AssistantMessage(content=self._answer),
+                message=AssistantMessage(
+                    content=self._answer, reasoning_content=self._reasoning_content
+                ),
                 finish_reason=FinishReason.END_TURN,
                 usage=self._usage,
             ),
@@ -53,9 +59,9 @@ class FakeLoop:
         self.closed = True
 
 
-def run_print_main(loop: FakeLoop, argv: list[str], tmp_path):
+def run_print_main(loop: FakeLoop, argv: list[str], tmp_path, *, thinking="disabled"):
     out, err = StringIO(), StringIO()
-    config = RuntimeConfig(api_key="test", workspace=tmp_path)
+    config = RuntimeConfig(api_key="test", workspace=tmp_path, thinking=thinking)
     with (
         patch("codehead.cli.load_runtime_config", return_value=config),
         patch("codehead.cli.build_agent_loop", return_value=loop),
@@ -64,6 +70,16 @@ def run_print_main(loop: FakeLoop, argv: list[str], tmp_path):
     ):
         code = asyncio.run(_main(argv))
     return code, out.getvalue(), err.getvalue()
+
+
+def test_print_thinking_keeps_reasoning_and_wait_status_out_of_output(tmp_path):
+    loop = FakeLoop(answer="answer", reasoning_content="private thought")
+    args = ["-p", "question"]
+    code, out, err = run_print_main(loop, args, tmp_path, thinking="enabled")
+    assert code == 0
+    assert "answer" in out
+    assert "private thought" not in out + err
+    assert "等待模型响应" not in out + err
 
 
 def test_print_writes_only_the_answer_to_stdout(tmp_path) -> None:

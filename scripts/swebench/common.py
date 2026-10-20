@@ -19,7 +19,12 @@ Issue:
 
 
 def config() -> dict:
-    return json.loads(Path(__file__).with_name("tasks.json").read_text("utf-8"))
+    settings = json.loads(Path(__file__).with_name("tasks.json").read_text("utf-8"))
+    if settings.get("thinking") not in ("enabled", "disabled"):
+        raise ValueError("thinking must be enabled or disabled")
+    if settings.get("reasoning_effort") not in ("low", "high", "max"):
+        raise ValueError("reasoning_effort must be low, high or max")
+    return settings
 
 
 def driver_fingerprint() -> str:

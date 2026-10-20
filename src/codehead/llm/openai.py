@@ -3,7 +3,7 @@
 import json
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from openai import AsyncOpenAI, OpenAIError
 from pydantic import ValidationError
@@ -37,10 +37,15 @@ class OpenAIProvider(LLMProvider):
         api_key: str,
         base_url: str | None = None,
         *,
-        disable_thinking: bool = True,
+        thinking: Literal["enabled", "disabled"] = "disabled",
+        reasoning_effort: Literal["low", "high", "max"] = "high",
         max_output_tokens: int | None = None,
         client: AsyncOpenAI | None = None,
     ) -> None:
+        if thinking not in ("enabled", "disabled"):
+            raise ValueError("thinking must be enabled or disabled")
+        if reasoning_effort not in ("low", "high", "max"):
+            raise ValueError("reasoning_effort must be low, high or max")
         if max_output_tokens is not None and (
             type(max_output_tokens) is not int or max_output_tokens < 1
         ):
@@ -48,7 +53,8 @@ class OpenAIProvider(LLMProvider):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
-        self.disable_thinking = disable_thinking
+        self.thinking = thinking
+        self.reasoning_effort = reasoning_effort
         self.max_output_tokens = max_output_tokens
         self._owns_client = client is None
         self._client = client or AsyncOpenAI(
@@ -63,9 +69,22 @@ class OpenAIProvider(LLMProvider):
             await self._client.close()
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[LLMStreamEvent]:
+        thinking = request.thinking or self.thinking
+        require_reasoning = thinking == "enabled" and bool(request.tools)
+        if require_reasoning and any(
+            isinstance(message, AssistantMessage) and message.reasoning_content is None
+            for message in request.messages
+        ):
+            raise ModelError(
+                "Assistant history is missing reasoning_content; "
+                "start a new session or disable thinking"
+            )
         payload: dict[str, Any] = {
             "model": self.model,
-            "messages": [_message_payload(message) for message in request.messages],
+            "messages": [
+                _message_payload(message, include_reasoning=bool(request.tools))
+                for message in request.messages
+            ],
             "stream": True,
             "stream_options": {"include_usage": True},
         }
@@ -75,10 +94,12 @@ class OpenAIProvider(LLMProvider):
             ]
         if self.max_output_tokens is not None:
             payload["max_tokens"] = self.max_output_tokens
-        if self.disable_thinking:
-            payload["extra_body"] = {"thinking": {"type": "disabled"}}
+        payload["extra_body"] = {"thinking": {"type": thinking}}
+        if thinking == "enabled":
+            payload["reasoning_effort"] = self.reasoning_effort
 
         text_parts: list[str] = []
+        reasoning_parts: list[str] = []
         calls: dict[int, _ToolCallBuffer] = {}
         finish_reason = None
         usage = None
@@ -98,6 +119,11 @@ class OpenAIProvider(LLMProvider):
                             "Model returned content after its finish reason"
                         )
                     delta = choice.delta
+                    reasoning = getattr(delta, "reasoning_content", None)
+                    if reasoning is not None:
+                        if not isinstance(reasoning, str):
+                            raise ModelError("Model returned invalid reasoning_content")
+                        reasoning_parts.append(reasoning)
                     if delta.content is not None:
                         if not isinstance(delta.content, str):
                             raise ModelError("Model returned an invalid response")
@@ -120,12 +146,23 @@ class OpenAIProvider(LLMProvider):
                     finish_reason = choice.finish_reason
             if not saw_choice:
                 raise ModelError("Model stream did not contain any choices")
+            normalized_finish = _finish_reason(finish_reason)
+            if (
+                require_reasoning
+                and normalized_finish
+                in (FinishReason.END_TURN, FinishReason.TOOL_CALLS)
+                and not reasoning_parts
+            ):
+                raise ModelError("Model response is missing reasoning_content")
             response = LLMResponse(
                 message=AssistantMessage(
                     content="".join(text_parts) if text_parts else None,
+                    reasoning_content=(
+                        "".join(reasoning_parts) if reasoning_parts else None
+                    ),
                     tool_calls=tuple(calls[index].parse() for index in sorted(calls)),
                 ),
-                finish_reason=_finish_reason(finish_reason),
+                finish_reason=normalized_finish,
                 usage=usage,
             )
         except OpenAIError as exc:
@@ -137,7 +174,7 @@ class OpenAIProvider(LLMProvider):
         yield LLMResponseCompleted(response=response)
 
 
-def _message_payload(message: Message) -> dict[str, Any]:
+def _message_payload(message: Message, *, include_reasoning: bool) -> dict[str, Any]:
     if isinstance(message, SystemMessage):
         return {"role": "system", "content": message.content}
 
@@ -149,6 +186,8 @@ def _message_payload(message: Message) -> dict[str, Any]:
             "role": "assistant",
             "content": message.content,
         }
+        if include_reasoning and message.reasoning_content is not None:
+            payload["reasoning_content"] = message.reasoning_content
         if message.tool_calls:
             payload["tool_calls"] = [
                 {

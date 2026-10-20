@@ -1,6 +1,7 @@
 """Immutable, validated configuration values without source loading."""
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -37,6 +38,8 @@ class RuntimeConfig(LocalConfig):
     model: str = Field(default="deepseek-flash", min_length=1)
     api_key: str = Field(min_length=1, repr=False)
     base_url: str = Field(default="https://api.deepseek.com", min_length=1)
+    thinking: Literal["enabled", "disabled"] = "disabled"
+    reasoning_effort: Literal["low", "high", "max"] = "high"
     context_budget: int = Field(default=DEFAULT_CONTEXT_BUDGET, ge=1024, strict=True)
     max_steps: int = Field(default=DEFAULT_MAX_STEPS, ge=1, strict=True)
 

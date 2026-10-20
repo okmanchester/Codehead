@@ -87,6 +87,7 @@ ADR 是**增量演进**的，不是一次性快照：
 | [0020](0020-large-window-context-budget.md) | 为当前大窗口模型提高默认输入预算 | Accepted | 2026-10-19 | 工作区未提交变更；提交时补来源 |
 | [0021](0021-swebench-evaluation-boundary.md) | SWE-bench 评测控制面与任务容器隔离 | Accepted | 2026-10-19 | 工作区未提交变更；提交时补来源 |
 | [0022](0022-swebench-artifact-retention.md) | SWE-bench 验收后的产物保留与释放 | Accepted | 2026-10-19 | 基于 `6000a55` 的工作区变更 |
+| [0023](0023-deepseek-thinking.md) | DeepSeek 思考内容随消息保存，摘要单独关闭思考 | Accepted | 2026-10-20 | 基于 `e916944` 的工作区变更 |
 
 模板见 [template.md](template.md)。
 

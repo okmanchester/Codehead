@@ -27,6 +27,7 @@ class AssistantMessage(CodeheadModel):
 
     role: Literal["assistant"] = "assistant"
     content: str | None = None
+    reasoning_content: str | None = None
     tool_calls: tuple[ToolCall, ...] = ()
 
 

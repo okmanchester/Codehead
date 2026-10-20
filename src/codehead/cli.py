@@ -30,6 +30,7 @@ from codehead.models import (
     ContextCompacted,
     ContextCompactionStarted,
     ModelCompleted,
+    ModelStarted,
     SystemMessage,
     TokenUsage,
     ToolApprovalRequested,
@@ -78,7 +79,8 @@ def build_agent_loop(
         model=config.model,
         api_key=config.api_key,
         base_url=config.base_url,
-        disable_thinking=True,
+        thinking=config.thinking,
+        reasoning_effort=config.reasoning_effort,
     )
     agent = Agent(
         provider=provider,
@@ -232,10 +234,15 @@ async def _consume_turn(
     loop: AgentLoop, session: Session, user_input: str, console: Console
 ) -> None:
     line_open = False
+    waiting = console.status("等待模型响应", spinner="dots")
     tool_names: dict[str, str] = {}
     try:
         async with aclosing(loop.stream(session, user_input)) as events:
             async for event in events:
+                if isinstance(event, ModelStarted):
+                    waiting.start()
+                else:
+                    waiting.stop()
                 if isinstance(event, AssistantTextDelta):
                     if not line_open:
                         console.print(Text("Codehead> ", style="bold cyan"), end="")
@@ -276,6 +283,7 @@ async def _consume_turn(
         # Do not allow KeyboardInterrupt to escape an asyncio child Task.
         raise asyncio.CancelledError from exc
     finally:
+        waiting.stop()
         if line_open:
             console.print()
 
@@ -454,6 +462,7 @@ def _open_session(
         workspace=str(config.workspace),
         model=config.model,
         base_url=config.base_url,
+        require_reasoning_content=config.thinking == "enabled",
     )
     console.print(Text(f"Resumed session: {session.id}"))
     if session.model_changed:

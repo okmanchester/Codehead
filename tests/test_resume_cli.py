@@ -87,6 +87,27 @@ def answer(text="answer"):
     )
 
 
+def test_main_rejects_missing_reasoning_before_accepting_input(setup):
+    config, store, session = setup
+    session.add(UserMessage(content="old"))
+    session.add(AssistantMessage(content="legacy"))
+    session.finish()
+    provider = Provider()
+    console = Console(file=StringIO())
+    console.input = Mock(side_effect=AssertionError("must not read input"))
+    config = config.model_copy(update={"thinking": "enabled"})
+    with (
+        patch("codehead.cli.load_runtime_config", return_value=config),
+        patch("codehead.cli.build_agent_loop", return_value=loop_for(provider)),
+        patch("codehead.cli.Console", return_value=console),
+    ):
+        assert asyncio.run(_main(["--resume", session.id])) == 1
+    console.input.assert_not_called()
+    assert provider.calls == []
+    assert state(store, session) == "closed"
+    assert "disable thinking" in console.file.getvalue()
+
+
 def tool_response():
     return LLMResponse(
         message=AssistantMessage(tool_calls=(ToolCall(id="count", name="count"),)),

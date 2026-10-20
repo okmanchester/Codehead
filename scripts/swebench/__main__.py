@@ -19,6 +19,17 @@ from scripts.swebench.common import (
 )
 from scripts.swebench.retention import cleanup, cleanup_offline
 
+# Reviewed drivers forced thinking off, irrespective of settings.
+# Each pair covers the LF and CRLF checkouts of the named driver snapshot.
+_LEGACY_DISABLED_DRIVERS = {
+    # e916944
+    "00377f532c7a26bc1dc552236c38d32b8fdfdffd7189ae071ba53f71eed83eee",
+    "58607c741df4da6fe5f455b24298782e79b7849abd1f2c465e07d5b8f3f94bc6",
+    # 2b7cb2e: LF fingerprint matches the existing first-run evaluation artifacts.
+    "0155ae79154868b28ed2005c104527c9a6d795c02a3e25abc26997a022298f99",
+    "1c841f5049ae009a921b9371f2814a27139c8d0e062aae37702a60ebdb4234d9",
+}
+
 
 def docker(*args, capture=False, **kwargs):
     return subprocess.run(
@@ -135,6 +146,21 @@ def report(root, destination=None):
     preflight = read_json(root / "preflight.json", {})
     settings = preflight.get("settings") or config()
     validation = read_json(root / "validation.json", {})
+    thinking = settings.get("thinking")
+    effort = settings.get("reasoning_effort")
+    if thinking not in ("enabled", "disabled"):
+        thinking = (
+            "disabled"
+            if validation.get("driver_sha256") in _LEGACY_DISABLED_DRIVERS
+            else "unknown"
+        )
+        effort = None
+    model_configuration = {
+        "model": settings["model"],
+        "thinking": thinking,
+        "reasoning_effort": effort,
+        "max_output_tokens": settings.get("max_output_tokens"),
+    }
     offline_result = read_json(root / "offline.json", {})
     analysis = read_json(root / "analysis.json", {})
     rows = []
@@ -177,6 +203,7 @@ def report(root, destination=None):
         )
     outcome = {
         "settings": settings,
+        "model_configuration": model_configuration,
         "preflight_ready": preflight.get("ready", False),
         "offline_passed": offline_result.get("passed", False),
         "controls_passed": validation.get("passed", False),
@@ -189,7 +216,12 @@ def report(root, destination=None):
     lines = [
         "# SWE-bench Lite 首轮评测",
         "",
-        f"数据：`{settings['dataset']}@{settings['revision']}`。模型：`deepseek-flash`，非思考模式。",
+        f"数据：`{settings['dataset']}@{settings['revision']}`。模型：`{settings['model']}`。",
+        (
+            f"思考模式：`{thinking if thinking != 'unknown' else '未确认'}`；"
+            f"配置强度：`{effort or '未确认'}`（仅开启时生效）；"
+            f"输出上限（思考与正文合计）：`{settings.get('max_output_tokens', '未确认')}`。"
+        ),
         "固定三题、单并发、每题一次；此结果不代表 Lite 整体能力。",
         "",
         f"离线检查：{outcome['offline_passed']}；环境就绪：{outcome['preflight_ready']}；评分对照：{outcome['controls_passed']}。",

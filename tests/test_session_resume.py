@@ -54,6 +54,70 @@ def metadata(store, session_id):
         ).fetchone()
 
 
+@pytest.mark.parametrize("reasoning", [None, "", "saved thought"])
+def test_reasoning_resume_round_trip_and_rejection_rolls_back(
+    store, tmp_path, reasoning
+):
+    session = create(
+        store,
+        tmp_path,
+        (
+            SystemMessage(content="sys"),
+            UserMessage(content="question"),
+            AssistantMessage(content="answer", reasoning_content=reasoning),
+        ),
+    )
+    session.finish()
+    before = metadata(store, session.id)
+    count = store._connection.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+    if reasoning is None:
+        # A pre-feature JSON message has no reasoning field at all.
+        old = session.messages[-1].model_dump(exclude={"reasoning_content"})
+        store._connection.execute(
+            "UPDATE messages SET message_json=? WHERE session_id=? AND sequence=3",
+            (json.dumps(old), session.id),
+        )
+        with pytest.raises(ResumeError, match="disable thinking"):
+            resume(
+                store,
+                tmp_path,
+                session.id,
+                require_reasoning_content=True,
+                model="different",
+            )
+        assert metadata(store, session.id) == before
+        assert (
+            store._connection.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+            == count
+        )
+        restored = resume(store, tmp_path, session.id)
+    else:
+        restored = resume(store, tmp_path, session.id, require_reasoning_content=True)
+    assert restored.messages == session.messages
+    assert restored.messages[-1].reasoning_content == reasoning
+
+
+def test_reasoning_resume_only_checks_active_checkpoint_history(store, tmp_path):
+    session = create(
+        store,
+        tmp_path,
+        (
+            SystemMessage(content="sys"),
+            UserMessage(content="old"),
+            AssistantMessage(content="legacy answer"),
+            UserMessage(content="recent"),
+            AssistantMessage(content="answer", reasoning_content="recent reasoning"),
+        ),
+    )
+    session.compact(
+        "earlier facts", tuple(r for r in session.records if r[0] in (1, 4, 5))
+    )
+    session.finish()
+    restored = resume(store, tmp_path, session.id, require_reasoning_content=True)
+    assert restored.summary == "earlier facts"
+    assert restored.messages[-1].reasoning_content == "recent reasoning"
+
+
 @pytest.mark.parametrize(
     "messages",
     [

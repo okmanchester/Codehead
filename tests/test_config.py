@@ -12,6 +12,8 @@ def clear_config_environment(monkeypatch: pytest.MonkeyPatch) -> None:
         "DEEPSEEK_API_KEY",
         "DEEPSEEK_BASE_URL",
         "CODEHEAD_MODEL",
+        "CODEHEAD_THINKING",
+        "CODEHEAD_REASONING_EFFORT",
         "CODEHEAD_WORKSPACE",
         "CODEHEAD_SESSION_DB",
         "CODEHEAD_CONTEXT_BUDGET",
@@ -51,6 +53,8 @@ def test_config_uses_deepseek_defaults(
     assert config.session_db_path == tmp_path / ".codehead" / "sessions.sqlite3"
     assert config.context_budget == 786432
     assert config.max_steps == 20
+    assert config.thinking == "disabled"
+    assert config.reasoning_effort == "high"
 
 
 def test_config_accepts_environment_overrides(
@@ -288,3 +292,43 @@ def test_missing_workspace_is_rejected(tmp_path, monkeypatch):
     monkeypatch.setenv("CODEHEAD_WORKSPACE", str(tmp_path / "missing"))
     with pytest.raises(ValueError, match="not a directory"):
         load_local_config()
+
+
+def test_thinking_sources_and_snapshot(tmp_path, monkeypatch):
+    write_config(tmp_path, 'thinking = "enabled"\nreasoning_effort = "low"')
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
+    configured = load_runtime_config()
+    assert (configured.thinking, configured.reasoning_effort) == ("enabled", "low")
+    monkeypatch.setenv("CODEHEAD_THINKING", "disabled")
+    monkeypatch.setenv("CODEHEAD_REASONING_EFFORT", "max")
+    overridden = load_runtime_config()
+    assert (overridden.thinking, overridden.reasoning_effort) == ("disabled", "max")
+    assert configured.thinking == "enabled"
+    monkeypatch.setenv("CODEHEAD_THINKING", "   ")
+    assert load_runtime_config().thinking == "enabled"
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "thinking = true",
+        'thinking = "auto"',
+        'reasoning_effort = "medium"',
+        "reasoning_effort = 1",
+    ],
+)
+def test_invalid_thinking_config_is_rejected(tmp_path, monkeypatch, content):
+    write_config(tmp_path, content)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
+    with pytest.raises(ValueError, match="Invalid runtime configuration"):
+        load_runtime_config()
+    monkeypatch.delenv("DEEPSEEK_API_KEY")
+    assert load_local_config().workspace == tmp_path
+
+
+@pytest.mark.parametrize("field", ["CODEHEAD_THINKING", "CODEHEAD_REASONING_EFFORT"])
+def test_invalid_thinking_environment_is_rejected(monkeypatch, field):
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
+    monkeypatch.setenv(field, "invalid")
+    with pytest.raises(ValueError):
+        load_runtime_config()

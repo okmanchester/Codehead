@@ -1,6 +1,7 @@
 """Offline evaluation contracts: no Docker, datasets or real model requests."""
 
 import asyncio
+import hashlib
 import io
 import json
 import shutil
@@ -35,6 +36,139 @@ from scripts.swebench.patches import (
 )
 from scripts.swebench.provider import BudgetExceeded, MeteredProvider
 from scripts.swebench.worker import execute
+
+
+@pytest.mark.parametrize("thinking", ["enabled", "disabled"])
+def test_worker_entrypoint_receives_actual_thinking_configuration(
+    tmp_path, monkeypatch, thinking
+):
+    from unittest.mock import Mock
+
+    from scripts.swebench import worker
+
+    cfg = {**config(), "thinking": thinking, "reasoning_effort": "low"}
+    task = tmp_path / "task.json"
+    task.write_text(
+        json.dumps(
+            {
+                "settings": control.worker_settings(cfg),
+                "problem_statement": "issue",
+                "prior_cost_cny": 0,
+            }
+        ),
+        "utf-8",
+    )
+    constructor = Mock()
+    monkeypatch.setattr(worker, "OpenAIProvider", constructor)
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test")
+    monkeypatch.setattr(sys, "argv", ["worker", str(task)])
+
+    async def fake_execute(*args, **kwargs):
+        assert args[3]["thinking"] == thinking
+
+    monkeypatch.setattr(worker, "execute", fake_execute)
+    worker.main()
+    assert constructor.call_args.kwargs["thinking"] == thinking
+    assert constructor.call_args.kwargs["reasoning_effort"] == "low"
+    assert constructor.call_args.kwargs["max_output_tokens"] == 8192
+
+
+@pytest.mark.parametrize(
+    "driver_sha256,expected_mode",
+    [
+        (
+            "00377f532c7a26bc1dc552236c38d32b8fdfdffd7189ae071ba53f71eed83eee",
+            "disabled",
+        ),
+        (
+            "58607c741df4da6fe5f455b24298782e79b7849abd1f2c465e07d5b8f3f94bc6",
+            "disabled",
+        ),
+        (
+            "0155ae79154868b28ed2005c104527c9a6d795c02a3e25abc26997a022298f99",
+            "disabled",
+        ),
+        (
+            "1c841f5049ae009a921b9371f2814a27139c8d0e062aae37702a60ebdb4234d9",
+            "disabled",
+        ),
+        ("unverified-driver", "unknown"),
+    ],
+    ids=["e916944-lf", "e916944-crlf", "2b7cb2e-lf", "2b7cb2e-crlf", "unknown"],
+)
+@pytest.mark.parametrize("old_disable", [False, True, None])
+def test_legacy_report_requires_driver_evidence_for_actual_mode(
+    tmp_path, driver_sha256, expected_mode, old_disable
+):
+    saved = config()
+    saved.pop("thinking")
+    saved.pop("reasoning_effort")
+    if old_disable is not None:
+        saved["disable_thinking"] = old_disable
+    (tmp_path / "preflight.json").write_text(json.dumps({"settings": saved}), "utf-8")
+    (tmp_path / "validation.json").write_text(
+        json.dumps({"driver_sha256": driver_sha256}),
+        "utf-8",
+    )
+    outcome = report(tmp_path)
+    assert outcome["model_configuration"]["thinking"] == expected_mode
+    label = expected_mode if expected_mode != "unknown" else "未确认"
+    assert f"思考模式：`{label}`" in (tmp_path / "REPORT.md").read_text("utf-8")
+    assert outcome["settings"] == saved
+
+
+def test_report_records_actual_model_mode_effort_and_output_limit(tmp_path):
+    saved = {
+        **config(),
+        "model": "test-model",
+        "thinking": "enabled",
+        "reasoning_effort": "low",
+    }
+    (tmp_path / "preflight.json").write_text(json.dumps({"settings": saved}), "utf-8")
+    outcome = report(tmp_path)
+    assert outcome["model_configuration"] == {
+        "model": "test-model",
+        "thinking": "enabled",
+        "reasoning_effort": "low",
+        "max_output_tokens": 8192,
+    }
+    text = (tmp_path / "REPORT.md").read_text("utf-8")
+    assert "test-model" in text and "enabled" in text and "low" in text
+
+
+@pytest.mark.parametrize(
+    "field,value", [("thinking", "auto"), ("reasoning_effort", "medium")]
+)
+def test_eval_invalid_thinking_settings_fail_before_execution(
+    monkeypatch, field, value
+):
+    settings = {**config(), field: value}
+    monkeypatch.setattr("scripts.swebench.common.json.loads", lambda _: settings)
+    with pytest.raises(ValueError, match=field):
+        config()
+
+
+@pytest.mark.parametrize(
+    "change", [{"thinking": "enabled"}, {"reasoning_effort": "low"}]
+)
+def test_thinking_setting_change_invalidates_paid_run_validation(
+    tmp_path, monkeypatch, change
+):
+    saved = config()
+    fingerprint = hashlib.sha256(json.dumps(saved, sort_keys=True).encode()).hexdigest()
+    (tmp_path / "validation.json").write_text(
+        json.dumps(
+            {
+                "passed": True,
+                "settings_sha256": fingerprint,
+            }
+        ),
+        "utf-8",
+    )
+    monkeypatch.setattr(control, "RESULTS", tmp_path)
+    with pytest.raises(RuntimeError, match="fixed configuration"):
+        control.run(None, {**saved, **change})
+    assert not (tmp_path / "first-run").exists()
 
 
 class FakeProvider(LLMProvider):

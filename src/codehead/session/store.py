@@ -11,7 +11,7 @@ from pathlib import Path
 from pydantic import TypeAdapter, ValidationError
 
 from codehead.errors import ResumeError, StorageError
-from codehead.models import Message
+from codehead.models import AssistantMessage, Message
 from codehead.session.history import MessageRecord, validate_history
 
 _MESSAGE = TypeAdapter(Message)
@@ -257,7 +257,13 @@ class SQLiteSessionStore:
                 raise ResumeError("Session is not active")
 
     def restore(
-        self, session_id: str, *, workspace: str, model: str, base_url: str
+        self,
+        session_id: str,
+        *,
+        workspace: str,
+        model: str,
+        base_url: str,
+        require_reasoning_content: bool = False,
     ) -> RestoredSession:
         """Claim and validate in one transaction; failures roll back the claim."""
         with self._transaction() as connection:
@@ -292,6 +298,15 @@ class SQLiteSessionStore:
             self._assert_settled(connection, session_id)
             records, summary, next_sequence = self._load_context(connection, session_id)
             validate_history(records)
+            if require_reasoning_content and any(
+                isinstance(message, AssistantMessage)
+                and message.reasoning_content is None
+                for _, message in records
+            ):
+                raise ResumeError(
+                    "Assistant history is missing reasoning_content; "
+                    "start a new session or disable thinking"
+                )
             factor = metadata[3]
             if (
                 not isinstance(factor, (int, float))

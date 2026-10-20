@@ -156,7 +156,8 @@ def main():
         model=settings["model"],
         api_key=os.environ.pop("DEEPSEEK_API_KEY"),
         base_url=settings["base_url"],
-        disable_thinking=True,
+        thinking=settings["thinking"],
+        reasoning_effort=settings["reasoning_effort"],
         max_output_tokens=settings["max_output_tokens"],
     )
     asyncio.run(

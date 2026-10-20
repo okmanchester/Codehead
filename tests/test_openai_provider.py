@@ -25,6 +25,260 @@ from codehead.models import (
 )
 
 
+def thinking_tools():
+    return (ToolDefinition(name="read", description="read", parameters={}),)
+
+
+@pytest.mark.parametrize("thinking", ["enabled", "disabled"])
+@pytest.mark.parametrize("effort", ["low", "high", "max"])
+def test_thinking_configuration_and_request_override(thinking, effort):
+    client = make_client([])
+    client.chat.completions.create.side_effect = [
+        FakeStream([chat_response(content="answer", reasoning_content="thought")]),
+        FakeStream([chat_response(content="summary")]),
+    ]
+    provider = OpenAIProvider(
+        "test", "secret", thinking=thinking, reasoning_effort=effort, client=client
+    )
+    asyncio.run(provider.complete(LLMRequest(messages=())))
+    asyncio.run(provider.complete(LLMRequest(messages=(), thinking="disabled")))
+    first, second = [
+        call.kwargs for call in client.chat.completions.create.call_args_list
+    ]
+    assert first["extra_body"] == {"thinking": {"type": thinking}}
+    assert first.get("reasoning_effort") == (effort if thinking == "enabled" else None)
+    assert second["extra_body"] == {"thinking": {"type": "disabled"}}
+    assert "reasoning_effort" not in second
+    assert provider.thinking == thinking
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [("thinking", "auto"), ("thinking", True), ("reasoning_effort", "medium")],
+)
+def test_invalid_thinking_constructor(field, value):
+    with pytest.raises(ValueError, match=field):
+        OpenAIProvider("test", "secret", **{field: value})
+
+
+@pytest.mark.parametrize("reasoning", [None, "", "thought"])
+@pytest.mark.parametrize("has_tools", [False, True])
+def test_existing_reasoning_is_forwarded_even_when_thinking_disabled(
+    reasoning, has_tools
+):
+    client = make_client(chat_response(content="done"))
+    provider = OpenAIProvider("test", "secret", client=client)
+    asyncio.run(
+        provider.complete(
+            LLMRequest(
+                messages=(
+                    AssistantMessage(content="old", reasoning_content=reasoning),
+                ),
+                tools=thinking_tools() if has_tools else (),
+            )
+        )
+    )
+    message = client.chat.completions.create.call_args.kwargs["messages"][0]
+    assert ("reasoning_content" in message) == (has_tools and reasoning is not None)
+    if "reasoning_content" in message:
+        assert message["reasoning_content"] == reasoning
+
+
+def test_missing_history_reasoning_is_rejected_before_network():
+    client = make_client(chat_response(content="done"))
+    provider = OpenAIProvider("test", "secret", thinking="enabled", client=client)
+    with pytest.raises(ModelError, match="start a new session or disable thinking"):
+        asyncio.run(
+            provider.complete(
+                LLMRequest(
+                    messages=(AssistantMessage(content="old"),), tools=thinking_tools()
+                )
+            )
+        )
+    client.chat.completions.create.assert_not_called()
+
+
+def test_reasoning_stream_is_accumulated_separately_from_text():
+    client = make_client(
+        [
+            chat_response(reasoning_content="", finish_reason=None),
+            chat_response(reasoning_content="think ", finish_reason=None),
+            chat_response(reasoning_content="more", content="answer"),
+        ]
+    )
+    provider = OpenAIProvider("test", "secret", thinking="enabled", client=client)
+
+    async def run():
+        return [
+            event
+            async for event in provider.stream(
+                LLMRequest(messages=(), tools=thinking_tools())
+            )
+        ]
+
+    events = asyncio.run(run())
+    assert events[0] == LLMTextDelta(delta="answer")
+    assert len(events) == 2
+    assert events[-1].response.message.reasoning_content == "think more"
+
+
+@pytest.mark.parametrize("reasoning", [None, "", 7, False, []])
+def test_required_response_reasoning_distinguishes_missing_empty_and_invalid(reasoning):
+    client = make_client(chat_response(content="done", reasoning_content=reasoning))
+    provider = OpenAIProvider("test", "secret", thinking="enabled", client=client)
+    request = LLMRequest(messages=(), tools=thinking_tools())
+    if reasoning == "":
+        assert asyncio.run(provider.complete(request)).message.reasoning_content == ""
+    else:
+        with pytest.raises(ModelError, match="reasoning_content"):
+            asyncio.run(provider.complete(request))
+
+
+@pytest.mark.parametrize(
+    "finish,expected",
+    [
+        ("length", FinishReason.MAX_TOKENS),
+        ("content_filter", FinishReason.CONTENT_FILTER),
+        ("unexpected", FinishReason.UNKNOWN),
+    ],
+)
+def test_missing_reasoning_does_not_mask_error_finish_reason(finish, expected):
+    provider = OpenAIProvider(
+        "test",
+        "secret",
+        thinking="enabled",
+        client=make_client(chat_response(content="partial", finish_reason=finish)),
+    )
+    result = asyncio.run(
+        provider.complete(LLMRequest(messages=(), tools=thinking_tools()))
+    )
+    assert result.finish_reason == expected
+
+
+def test_usage_completion_total_already_includes_reasoning_tokens():
+    total = usage(prompt_tokens=10, completion_tokens=100, total_tokens=110)
+    total.completion_tokens_details = SimpleNamespace(reasoning_tokens=80)
+    provider = OpenAIProvider(
+        "test",
+        "secret",
+        thinking="enabled",
+        client=make_client(
+            chat_response(content="answer", reasoning_content="thought", usage=total)
+        ),
+    )
+    result = asyncio.run(provider.complete(LLMRequest(messages=())))
+    assert result.usage == TokenUsage(
+        input_tokens=10, output_tokens=100, total_tokens=110
+    )
+
+
+def test_thinking_tool_loop_preserves_reasoning_across_calls_and_user_turns(tmp_path):
+    from codehead.agent import Agent, AgentLoop
+    from codehead.permissions import PermissionPolicy
+    from codehead.session import Session
+    from codehead.tools import ReadTool, ToolRegistry
+
+    (tmp_path / "data.txt").write_text("data", "utf-8")
+    tools = ToolRegistry([ReadTool(tmp_path)])
+    client = make_client([])
+    client.chat.completions.create.side_effect = [
+        FakeStream(
+            [
+                chat_response(
+                    reasoning_content=f"thought {i}",
+                    tool_calls=[
+                        function_call(f"read-{i}", "read", '{"path":"data.txt"}')
+                    ],
+                    finish_reason="tool_calls",
+                )
+            ]
+        )
+        for i in range(2)
+    ] + [
+        FakeStream(
+            [chat_response(content="first done", reasoning_content="final thought")]
+        ),
+        FakeStream(
+            [chat_response(content="next done", reasoning_content="next thought")]
+        ),
+    ]
+    provider = OpenAIProvider("test", "secret", thinking="enabled", client=client)
+    loop = AgentLoop(
+        Agent(provider=provider, tools=tools, system_prompt="sys"),
+        permission_policy=PermissionPolicy.allow_all(tmp_path, ["read"]),
+    )
+
+    async def run():
+        session = Session()
+        try:
+            assert await loop.run(session, "first") == "first done"
+            assert await loop.run(session, "second") == "next done"
+            assert [
+                m.reasoning_content
+                for m in session.messages
+                if isinstance(m, AssistantMessage)
+            ] == ["thought 0", "thought 1", "final thought", "next thought"]
+        finally:
+            session.close()
+            await loop.aclose()
+
+    asyncio.run(run())
+    payloads = [call.kwargs for call in client.chat.completions.create.call_args_list]
+    assert [
+        m["reasoning_content"]
+        for m in payloads[-1]["messages"]
+        if m["role"] == "assistant"
+    ] == [
+        "thought 0",
+        "thought 1",
+        "final thought",
+    ]
+
+
+@pytest.mark.parametrize("failure", ["missing", "truncated", "cancelled"])
+def test_failed_thinking_stream_never_commits_assistant_or_executes_tools(
+    tmp_path, failure
+):
+    from codehead.agent import Agent, AgentLoop
+    from codehead.permissions import PermissionPolicy
+    from codehead.session import Session
+    from codehead.tools import ReadTool, ToolRegistry
+
+    tool = ReadTool(tmp_path)
+    chunk = chat_response(
+        tool_calls=[function_call("one", "read", '{"path":"missing"}')],
+        finish_reason="length" if failure == "truncated" else "tool_calls",
+    )
+    if failure == "cancelled":
+        chunk.choices[0].finish_reason = None
+        chunks = [chunk, asyncio.CancelledError()]
+    else:
+        chunks = [chunk]
+    provider = OpenAIProvider(
+        "test", "secret", thinking="enabled", client=make_client(chunks)
+    )
+    loop = AgentLoop(
+        Agent(provider=provider, tools=ToolRegistry([tool]), system_prompt="sys"),
+        permission_policy=PermissionPolicy.allow_all(tmp_path, ["read"]),
+    )
+
+    async def run():
+        session = Session()
+        try:
+            with patch.object(tool, "execute") as execute:
+                with pytest.raises(
+                    asyncio.CancelledError if failure == "cancelled" else ModelError
+                ):
+                    await loop.run(session, "read")
+                execute.assert_not_called()
+            assert not any(isinstance(m, AssistantMessage) for m in session.messages)
+        finally:
+            session.close()
+            await loop.aclose()
+
+    asyncio.run(run())
+
+
 class FakeStream:
     def __init__(self, chunks):
         self.chunks = iter(chunks)
@@ -73,13 +327,16 @@ def make_client(response: object) -> Mock:
 def chat_response(
     *,
     content: object = None,
+    reasoning_content: object = None,
     tool_calls: list[object] | None = None,
     finish_reason: object = "stop",
     usage: object = None,
 ) -> object:
     for index, call in enumerate(tool_calls or ()):
         call.index = index
-    delta = SimpleNamespace(content=content, tool_calls=tool_calls)
+    delta = SimpleNamespace(
+        content=content, reasoning_content=reasoning_content, tool_calls=tool_calls
+    )
     choice = SimpleNamespace(delta=delta, finish_reason=finish_reason, index=0)
     return SimpleNamespace(choices=[choice], usage=usage)
 

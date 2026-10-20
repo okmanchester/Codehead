@@ -1,6 +1,7 @@
 """Models exchanged across the LLM provider boundary."""
 
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import Field
 
@@ -32,6 +33,7 @@ class LLMRequest(CodeheadModel):
 
     messages: tuple[Message, ...]
     tools: tuple[ToolDefinition, ...] = ()
+    thinking: Literal["enabled", "disabled"] | None = None
 
 
 class LLMResponse(CodeheadModel):

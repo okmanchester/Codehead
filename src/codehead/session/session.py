@@ -101,9 +101,14 @@ class Session:
         workspace: str,
         model: str,
         base_url: str,
+        require_reasoning_content: bool = False,
     ) -> "Session":
         restored = store.restore(
-            session_id, workspace=workspace, model=model, base_url=base_url
+            session_id,
+            workspace=workspace,
+            model=model,
+            base_url=base_url,
+            require_reasoning_content=require_reasoning_content,
         )
         session = cls.__new__(cls)
         session._owns_store = False
